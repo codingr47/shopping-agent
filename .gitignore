@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+*.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+**/data/app.db
+**/data/app.db-*
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+package-lock.json
+dummyjson_products_openapi.yaml

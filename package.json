@@ -1,0 +1,19 @@
+{
+  "name": "shopping-agent",
+  "version": "1.0.0",
+  "description": "Minimal AI shopping experience with conversational product discovery",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n web,server \"npm run dev -w apps/web\" \"npm run dev -w apps/server\"",
+    "build": "npm run build -w packages/shared && npm run build -w apps/mcp-server && npm run build -w apps/server && npm run build -w apps/web",
+    "typecheck": "npm run typecheck -w packages/shared && npm run typecheck -w apps/mcp-server && npm run typecheck -w apps/server && npm run typecheck -w apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "typescript": "^5.5.0"
+  }
+}
