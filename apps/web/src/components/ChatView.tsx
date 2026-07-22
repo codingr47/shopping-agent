@@ -7,8 +7,15 @@ interface ChatViewProps {
   threadId: string | null;
 }
 
+interface PendingAssistant {
+  statusLabel: string;
+  text: string;
+  parts: ChatMessage["content"];
+}
+
 export function ChatView({ threadId }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pendingAssistant, setPendingAssistant] = useState<PendingAssistant | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -23,7 +30,7 @@ export function ChatView({ threadId }: ChatViewProps) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, pendingAssistant]);
 
   const fetchMessages = async (id: string) => {
     try {
@@ -48,6 +55,7 @@ export function ChatView({ threadId }: ChatViewProps) {
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
+    setPendingAssistant({ statusLabel: "Thinking…", text: "", parts: [] });
 
     try {
       const response = await fetch(`/api/conversations/${threadId}/messages`, {
@@ -60,10 +68,11 @@ export function ChatView({ threadId }: ChatViewProps) {
         throw new Error("Failed to send message");
       }
 
-      const assistantContent: ChatMessage["content"] = [];
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+
+      const accumulatedMessage: PendingAssistant = { statusLabel: "Thinking…", text: "", parts: [] };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -78,10 +87,14 @@ export function ChatView({ threadId }: ChatViewProps) {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.type === "text") {
-                assistantContent.push({ type: "text", text: data.text });
+
+              if (data.type === "status") {
+                accumulatedMessage.statusLabel = data.label;
+              } else if (data.type === "text-delta") {
+                accumulatedMessage.text += data.text;
+                accumulatedMessage.statusLabel = "";
               } else if (data.type === "tool-call") {
-                assistantContent.push({
+                accumulatedMessage.parts.push({
                   type: "tool-call",
                   toolCallId: data.toolCallId,
                   toolName: data.toolName,
@@ -89,6 +102,8 @@ export function ChatView({ threadId }: ChatViewProps) {
                   result: data.result,
                 });
               }
+
+              setPendingAssistant({ ...accumulatedMessage });
             } catch {
               continue;
             }
@@ -96,17 +111,22 @@ export function ChatView({ threadId }: ChatViewProps) {
         }
       }
 
-      if (assistantContent.length > 0) {
+      if (accumulatedMessage.text.length > 0 || accumulatedMessage.parts.length > 0) {
         const assistantMessage: ChatMessage = {
           role: "assistant",
-          content: assistantContent,
+          content: [
+            ...(accumulatedMessage.text.length > 0 ? [{ type: "text" as const, text: accumulatedMessage.text }] : []),
+            ...accumulatedMessage.parts,
+          ],
         };
+
         setMessages(prev => [...prev, assistantMessage]);
       }
     } catch (err) {
       console.error("Failed to get response:", err);
     } finally {
       setLoading(false);
+      setPendingAssistant(null);
     }
   };
 
@@ -147,6 +167,38 @@ export function ChatView({ threadId }: ChatViewProps) {
             </div>
           </div>
         ))}
+
+        {pendingAssistant && (
+          <div className="message assistant">
+            <div className="message-content">
+              {pendingAssistant.text.length > 0 ? (
+                <p className="text-part">{pendingAssistant.text}</p>
+              ) : pendingAssistant.statusLabel ? (
+                <div className="pending-message">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="status-label">{pendingAssistant.statusLabel}</span>
+                </div>
+              ) : null}
+
+              {pendingAssistant.parts.map((part, pIdx) => {
+                if (part.type === "tool-call" && (part as any).toolName === "render_products") {
+                  return (
+                    <ProductGrid
+                      key={pIdx}
+                      products={((part as any).result?.products as ProductSummary[]) || []}
+                    />
+                  );
+                }
+                return null;
+              })}
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 

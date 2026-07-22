@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessageChunk } from "@langchain/core/messages";
 import { createGraph } from "../graph/graph.js";
 import { updateConversationUpdatedAt, updateConversationTitle, getConversation } from "../db/sqlite.js";
 import { randomUUID } from "crypto";
@@ -13,6 +13,13 @@ interface ChatRequest {
 function encodeSSEEvent(event: string, data: any): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
+
+const nodeStatusLabels: Record<string, string> = {
+  guardrail: "Understanding your request…",
+  search: "Searching for products…",
+  category: "Browsing categories…",
+  detail: "Looking up product details…",
+};
 
 router.post("/:id/messages", async (req: Request, res: Response) => {
   try {
@@ -32,12 +39,12 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
 
     const config = {
       configurable: { thread_id: id },
-      streamMode: "updates" as const,
+      streamMode: ["updates", "messages"] as const,
     };
 
-    let messagesSent = false;
     let productResults: any[] | null = null;
-    let finalMessage = "";
+    let categories: string[] | null = null;
+    let offTopicMessageEmitted = false;
 
     try {
       const stream = await graph.stream(
@@ -46,21 +53,63 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
       );
 
       for await (const event of stream as any) {
-        const nodeOutput = event;
+        if (!Array.isArray(event) || event.length !== 2) continue;
 
-        if (nodeOutput && typeof nodeOutput === "object") {
-          if ("finalMessage" in nodeOutput && nodeOutput.finalMessage) {
-            finalMessage = nodeOutput.finalMessage;
-            const textEvent = encodeSSEEvent("message", {
-              type: "text",
-              text: nodeOutput.finalMessage,
-            });
-            res.write(textEvent);
-            messagesSent = true;
+        const [mode, payload] = event;
+
+        if (mode === "updates") {
+          if (!payload || typeof payload !== "object") continue;
+
+          const entries = Object.entries(payload);
+          if (entries.length === 0) continue;
+
+          const [nodeName, delta] = entries[0] as [string, any];
+
+          if (delta && typeof delta === "object") {
+            if (nodeName === "offTopic" && delta.finalMessage && !offTopicMessageEmitted) {
+              res.write(
+                encodeSSEEvent("message", {
+                  type: "text-delta",
+                  text: delta.finalMessage,
+                }),
+              );
+              offTopicMessageEmitted = true;
+            } else if (nodeStatusLabels[nodeName]) {
+              res.write(
+                encodeSSEEvent("message", {
+                  type: "status",
+                  label: nodeStatusLabels[nodeName],
+                }),
+              );
+            }
+
+            if (delta.productResults) {
+              productResults = delta.productResults;
+            }
+
+            if (delta.categories) {
+              categories = delta.categories;
+            }
           }
+        } else if (mode === "messages") {
+          if (!Array.isArray(payload) || payload.length < 2) continue;
 
-          if ("productResults" in nodeOutput && nodeOutput.productResults) {
-            productResults = nodeOutput.productResults;
+          const [chunk, metadata] = payload;
+
+          if (
+            metadata &&
+            typeof metadata === "object" &&
+            metadata.langgraph_node === "summarize" &&
+            chunk instanceof AIMessageChunk &&
+            typeof chunk.content === "string" &&
+            chunk.content.length > 0
+          ) {
+            res.write(
+              encodeSSEEvent("message", {
+                type: "text-delta",
+                text: chunk.content,
+              }),
+            );
           }
         }
       }

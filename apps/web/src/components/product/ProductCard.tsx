@@ -15,8 +15,12 @@ export function ProductCard({ product }: ProductCardProps) {
         <h3 className="product-title">{product.title}</h3>
         <p className="product-description">{product.shortDescription}</p>
         <div className="product-footer">
-          <div className="product-price">${product.price.toFixed(2)}</div>
-          <div className="product-rating">★ {product.rating.toFixed(1)}</div>
+          {product.price !== undefined && (
+            <div className="product-price">${typeof product.price === "number" ? product.price.toFixed(2) : "N/A"}</div>
+          )}
+          {product.rating !== undefined && (
+            <div className="product-rating">★ {typeof product.rating === "number" ? product.rating.toFixed(1) : "N/A"}</div>
+          )}
         </div>
       </div>
     </div>
