@@ -14,6 +14,7 @@ export interface NodeModelConfig {
 export abstract class BaseGraphNode<TState = ShoppingStateType> {
   protected readonly config: NodeModelConfig;
   protected readonly llm: ChatOpenAI;
+  private readonly logger: Logger;
 
   constructor(config: NodeModelConfig) {
     this.config = config;
@@ -36,6 +37,8 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
       topP: config.topP,
       modelKwargs: Object.keys(modelKwargs).length > 0 ? modelKwargs : undefined,
     });
+
+    this.logger = logger;
   }
 
   abstract run(state: TState, log: Logger): Promise<Partial<TState>>;
@@ -72,6 +75,10 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
         throw err;
       }
     };
+  }
+
+  private info(msg: any) {
+    this.logger.info(msg);
   }
 
   private summarizeState(partial: Partial<TState> | undefined): Record<string, unknown> {

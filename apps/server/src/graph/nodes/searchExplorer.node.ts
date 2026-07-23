@@ -1,65 +1,39 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
+import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType } from "../state.js";
-import { callTool, parseToolResult } from "../../mcp/client.js";
+import { callTool, parseToolResult, getMcpClient } from "../../mcp/client.js";
 import type { Logger } from "../../logger.js";
-import {
-  searchProductsInput,
-  listProductsInput,
-  getProductByIdInput,
-  listCategoriesInput,
-  getProductsByCategoryInput,
-} from "@shopping-agent/shared";
 
 export class SearchExplorerNode extends BaseGraphNode {
-  private tools: DynamicStructuredTool[];
+  private tools: DynamicStructuredTool[] | null = null;
 
   constructor(config: NodeModelConfig) {
     super(config);
+  }
 
-    this.tools = [
-      new DynamicStructuredTool({
-        name: "search_products",
-        description: "Search the product catalog by free-text query. Returns a trimmed list of matching products.",
-        schema: searchProductsInput,
+  private async discoverTools(): Promise<DynamicStructuredTool[]> {
+    if (this.tools !== null) {
+      return this.tools;
+    }
+
+    const client = getMcpClient();
+    const toolsResponse = await client.listTools();
+
+    this.tools = (toolsResponse.tools || []).map(tool => {
+      const schema = (tool.inputSchema as Record<string, unknown>) || {};
+      return new DynamicStructuredTool({
+        name: tool.name,
+        description: tool.description || `MCP tool: ${tool.name}`,
+        schema: schema as unknown as z.ZodType,
         func: async () => {
           throw new Error("Tool execution handled by SearchExplorerNode");
         },
-      }),
-      new DynamicStructuredTool({
-        name: "list_products",
-        description: "List products with optional pagination, sorting, and filtering.",
-        schema: listProductsInput,
-        func: async () => {
-          throw new Error("Tool execution handled by SearchExplorerNode");
-        },
-      }),
-      new DynamicStructuredTool({
-        name: "get_products_by_category",
-        description: "Get products within a specific category by slug.",
-        schema: getProductsByCategoryInput,
-        func: async () => {
-          throw new Error("Tool execution handled by SearchExplorerNode");
-        },
-      }),
-      new DynamicStructuredTool({
-        name: "list_categories",
-        description: "Get a list of available product categories.",
-        schema: listCategoriesInput,
-        func: async () => {
-          throw new Error("Tool execution handled by SearchExplorerNode");
-        },
-      }),
-      new DynamicStructuredTool({
-        name: "get_product_by_id",
-        description: "Get detailed information about a single product by its ID.",
-        schema: getProductByIdInput,
-        func: async () => {
-          throw new Error("Tool execution handled by SearchExplorerNode");
-        },
-      }),
-    ];
+      });
+    });
+
+    return this.tools;
   }
 
   async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
@@ -71,6 +45,8 @@ export class SearchExplorerNode extends BaseGraphNode {
     }
 
     try {
+      const tools = await this.discoverTools();
+
       const lastUserMessage = messages
         .slice()
         .reverse()
@@ -102,7 +78,7 @@ Use your judgment and the available tools to provide the best shopping assistanc
 
 Choose the best tool to help them with their request.`;
 
-      const modelWithTools = this.llm.bindTools(this.tools);
+      const modelWithTools = this.llm.bindTools(tools);
       const response = await modelWithTools.invoke([
         { type: "system" as const, content: systemPrompt },
         new HumanMessage(userPrompt),

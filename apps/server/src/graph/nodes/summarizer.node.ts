@@ -42,7 +42,7 @@ Do NOT describe the products in detail — that's what the product cards are for
 Context: ${contextText}
 
 Generate a brief response and suggest a next step.`;
-
+    
     const response = await this.llm.invoke([
       { type: "system" as const, content: systemPrompt },
       new HumanMessage(userPrompt),
