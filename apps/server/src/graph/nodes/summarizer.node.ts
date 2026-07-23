@@ -18,17 +18,19 @@ export class SummarizerNode extends BaseGraphNode {
 
     const userQuery = lastUserMessage ? lastUserMessage.content : "";
 
-    let contextText = "";
+    const contextParts: string[] = [];
 
     if (productResults && productResults.length > 0) {
-      contextText = `Found ${productResults.length} product(s). Here are the top matches:`;
-    } else if (productDetail) {
-      contextText = `Here are the details for the product:`;
-    } else if (categories && categories.length > 0) {
-      contextText = `Available categories: ${categories.join(", ")}`;
-    } else {
-      contextText = "No results found.";
+      contextParts.push(`Found ${productResults.length} product(s). Here are the top matches:`);
     }
+    if (productDetail) {
+      contextParts.push(`Here are the details for the product:`);
+    }
+    if (categories && categories.length > 0) {
+      contextParts.push(`Available categories: ${categories.join(", ")}`);
+    }
+
+    const contextText = contextParts.length > 0 ? contextParts.join(" ") : "No results found.";
 
     const systemPrompt = `You are a helpful shopping assistant. The user has just made a request.
 Based on the context provided, generate a brief, friendly response (2-3 sentences max).

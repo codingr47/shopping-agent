@@ -2,9 +2,7 @@ import { StateGraph, START, END } from "@langchain/langgraph";
 import { ShoppingState, type ShoppingStateType } from "./state.js";
 import { GuardrailIntentClassifierNode } from "./nodes/guardrailIntentClassifier.node.js";
 import { SupervisorNode } from "./nodes/supervisor.node.js";
-import { ProductSearchNode } from "./nodes/productSearch.node.js";
-import { CategoryNode } from "./nodes/category.node.js";
-import { ProductDetailNode } from "./nodes/productDetail.node.js";
+import { SearchExplorerNode } from "./nodes/searchExplorer.node.js";
 import { OffTopicResponderNode } from "./nodes/offTopic.node.js";
 import { SummarizerNode } from "./nodes/summarizer.node.js";
 import { getCheckpointer } from "../db/sqlite.js";
@@ -21,15 +19,7 @@ export function createGraph() {
     model: env.MINI_MODEL,
   });
 
-  const searchNode = new ProductSearchNode({
-    model: env.NANO_MODEL,
-  });
-
-  const categoryNode = new CategoryNode({
-    model: env.NANO_MODEL,
-  });
-
-  const detailNode = new ProductDetailNode({
+  const searchExplorerNode = new SearchExplorerNode({
     model: env.NANO_MODEL,
   });
 
@@ -45,9 +35,7 @@ export function createGraph() {
   const graph = new StateGraph(ShoppingState)
     .addNode("guardrail", guardrailNode.toNodeFn())
     .addNode("supervisor", supervisorNode.toNodeFn())
-    .addNode("search", searchNode.toNodeFn())
-    .addNode("category", categoryNode.toNodeFn())
-    .addNode("detail", detailNode.toNodeFn())
+    .addNode("searchExplorer", searchExplorerNode.toNodeFn())
     .addNode("offTopic", offTopicNode.toNodeFn())
     .addNode("summarize", summarizerNode.toNodeFn())
     .addEdge(START, "guardrail")
@@ -64,15 +52,11 @@ export function createGraph() {
         return state.route || "summarize";
       },
       {
-        search: "search",
-        category: "category",
-        detail: "detail",
+        searchExplorer: "searchExplorer",
         summarize: "summarize",
       },
     )
-    .addEdge("search", "summarize")
-    .addEdge("category", "summarize")
-    .addEdge("detail", "summarize")
+    .addEdge("searchExplorer", "supervisor")
     .addEdge("summarize", END)
     .addEdge("offTopic", END);
 

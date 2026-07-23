@@ -17,9 +17,12 @@ function encodeSSEEvent(event: string, data: any): string {
 
 const nodeStatusLabels: Record<string, string> = {
   guardrail: "Understanding your request…",
+};
+
+const intentStatusLabels: Record<string, string> = {
   search: "Searching for products…",
-  category: "Browsing categories…",
-  detail: "Looking up product details…",
+  browse_category: "Browsing categories…",
+  product_detail: "Looking up product details…",
 };
 
 router.post("/:id/messages", async (req: Request, res: Response) => {
@@ -92,6 +95,16 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
                   label: nodeStatusLabels[nodeName],
                 }),
               );
+            } else if (nodeName === "supervisor" && delta.route === "searchExplorer" && delta.currentIntent) {
+              const intentLabel = intentStatusLabels[delta.currentIntent.type];
+              if (intentLabel) {
+                res.write(
+                  encodeSSEEvent("message", {
+                    type: "status",
+                    label: intentLabel,
+                  }),
+                );
+              }
             }
 
             if (delta.productResults) {

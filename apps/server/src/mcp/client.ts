@@ -58,3 +58,11 @@ export async function callTool(log: Logger, name: string, args: Record<string, u
     throw err;
   }
 }
+
+export function parseToolResult<T = any>(result: any): T {
+  const content = result?.content?.[0];
+  if (result?.isError || !content || content.type !== "text") {
+    throw new Error(typeof content?.text === "string" ? content.text : "MCP tool call returned no usable content");
+  }
+  return JSON.parse(content.text);
+}
