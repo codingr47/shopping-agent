@@ -10,6 +10,7 @@ import {
 import { createGraph } from "../graph/graph.js";
 import { BaseMessage } from "@langchain/core/messages";
 import { ChatMessage, ChatMessageContentPart } from "@shopping-agent/shared";
+import { TurnWidget } from "../graph/state.js";
 
 const router = Router();
 
@@ -78,6 +79,19 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     const messages = (state.values?.messages || []) as BaseMessage[];
     const chatMessages = convertMessages(messages);
+
+    const turnWidgets = (state.values?.turnWidgets || []) as TurnWidget[];
+    for (const widget of turnWidgets) {
+      if (chatMessages[widget.turnIndex]) {
+        chatMessages[widget.turnIndex].content.push({
+          type: "tool-call",
+          toolCallId: randomUUID(),
+          toolName: "render_products",
+          args: {},
+          result: { products: widget.products },
+        });
+      }
+    }
 
     res.json({
       ...conversation,

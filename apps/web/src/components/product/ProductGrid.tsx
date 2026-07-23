@@ -11,11 +11,6 @@ export function ProductGrid({ products }: ProductGridProps) {
     return <div className="product-grid-empty">No products found</div>;
   }
 
-  console.error("[ProductGrid] products:", products);
-  if (products.length > 0) {
-    console.error("[ProductGrid] first product:", products[0]);
-  }
-
   return (
     <div className="product-grid">
       {products.map((product, idx) => (
