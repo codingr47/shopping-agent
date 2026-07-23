@@ -19,7 +19,6 @@ if (result.error) {
 
 async function main() {
   const express = (await import("express")).default;
-  const pinoHttp = (await import("pino-http")) as any;
   const { initializeDatabase } = await import("./db/sqlite.js");
   const { initializeMcpClient } = await import("./mcp/client.js");
   const { env } = await import("./env.js");
@@ -30,7 +29,6 @@ async function main() {
   const app = express();
 
   app.use(express.json());
-  app.use(pinoHttp({ logger }));
   app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
