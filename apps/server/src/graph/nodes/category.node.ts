@@ -1,24 +1,21 @@
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType } from "../state.js";
-import { getMcpClient } from "../../mcp/client.js";
+import { callTool } from "../../mcp/client.js";
+import type { Logger } from "../../logger.js";
 
 export class CategoryNode extends BaseGraphNode {
   constructor(config: NodeModelConfig) {
     super(config);
   }
 
-  async run(state: ShoppingStateType): Promise<Partial<ShoppingStateType>> {
+  async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
     const { slots } = state;
-    const client = getMcpClient();
 
     try {
       if (slots?.category) {
-        const toolResult = await client.callTool({
-          name: "get_products_by_category",
-          arguments: {
-            slug: slots.category,
-            limit: 10,
-          },
+        const toolResult = await callTool(log, "get_products_by_category", {
+          slug: slots.category,
+          limit: 10,
         });
 
         const content = (toolResult.content as any[])?.[0];
@@ -35,10 +32,7 @@ export class CategoryNode extends BaseGraphNode {
           };
         }
       } else {
-        const toolResult = await client.callTool({
-          name: "list_categories",
-          arguments: {},
-        });
+        const toolResult = await callTool(log, "list_categories", {});
 
         const content = (toolResult.content as any[])?.[0];
         if (content && content.type === "text") {
@@ -51,7 +45,7 @@ export class CategoryNode extends BaseGraphNode {
 
       return { productResults: [] };
     } catch (error) {
-      console.error("[CategoryNode] Error:", error);
+      log.error({ err: error, slots }, "category lookup failed");
       return { productResults: [] };
     }
   }

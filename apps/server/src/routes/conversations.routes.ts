@@ -11,6 +11,7 @@ import { createGraph } from "../graph/graph.js";
 import { BaseMessage } from "@langchain/core/messages";
 import { ChatMessage, ChatMessageContentPart } from "@shopping-agent/shared";
 import { TurnWidget } from "../graph/state.js";
+import { logger } from "../logger.js";
 
 const router = Router();
 
@@ -41,32 +42,38 @@ function convertMessages(messages: BaseMessage[]): ChatMessage[] {
 }
 
 router.get("/", (req: Request, res: Response) => {
+  const log = logger.child({ requestId: randomUUID(), route: "list_conversations" });
   try {
     const conversations = listConversations();
+    log.info({ event: "list.success", count: conversations.length }, "conversations listed");
     res.json(conversations);
   } catch (error) {
-    console.error("[conversations.get] Error:", error);
+    log.error({ event: "list.error", err: error }, "list conversations failed");
     res.status(500).json({ error: "Failed to list conversations" });
   }
 });
 
 router.post("/", (req: Request<{}, {}, {}>, res: Response) => {
+  const log = logger.child({ requestId: randomUUID(), route: "create_conversation" });
   try {
     const id = randomUUID();
     const conversation = createConversation(id);
+    log.info({ event: "create.success", conversationId: id }, "conversation created");
     res.json(conversation);
   } catch (error) {
-    console.error("[conversations.post] Error:", error);
+    log.error({ event: "create.error", err: error }, "create conversation failed");
     res.status(500).json({ error: "Failed to create conversation" });
   }
 });
 
 router.get("/:id", async (req: Request, res: Response) => {
+  const log = logger.child({ requestId: randomUUID(), route: "get_conversation", conversationId: req.params.id });
   try {
     const { id } = req.params;
     const conversation = getConversation(id);
 
     if (!conversation) {
+      log.warn({ event: "get.not_found", conversationId: id }, "conversation not found");
       return res.status(404).json({ error: "Conversation not found" });
     }
 
@@ -74,6 +81,7 @@ router.get("/:id", async (req: Request, res: Response) => {
     const state = await graph.getState({ configurable: { thread_id: id } });
 
     if (!state || !state.values) {
+      log.debug({ event: "get.empty_state", conversationId: id }, "no state in checkpointer");
       return res.json({ ...conversation, messages: [] });
     }
 
@@ -93,23 +101,34 @@ router.get("/:id", async (req: Request, res: Response) => {
       }
     }
 
+    log.debug(
+      { event: "get.success", messageCount: chatMessages.length, widgetCount: turnWidgets.length },
+      "conversation reconstructed",
+    );
+    log.info(
+      { event: "get.end", conversationId: id, messageCount: chatMessages.length },
+      "conversation retrieved",
+    );
+
     res.json({
       ...conversation,
       messages: chatMessages,
     });
   } catch (error) {
-    console.error("[conversations.get:id] Error:", error);
+    log.error({ event: "get.error", err: error }, "fetch conversation failed");
     res.status(500).json({ error: "Failed to fetch conversation" });
   }
 });
 
 router.delete("/:id", (req: Request, res: Response) => {
+  const log = logger.child({ requestId: randomUUID(), route: "delete_conversation", conversationId: req.params.id });
   try {
     const { id } = req.params;
     deleteConversation(id);
+    log.info({ event: "delete.success", conversationId: id }, "conversation deleted");
     res.json({ success: true });
   } catch (error) {
-    console.error("[conversations.delete] Error:", error);
+    log.error({ event: "delete.error", err: error, conversationId: req.params.id }, "delete conversation failed");
     res.status(500).json({ error: "Failed to delete conversation" });
   }
 });

@@ -1,24 +1,21 @@
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType } from "../state.js";
-import { getMcpClient } from "../../mcp/client.js";
+import { callTool } from "../../mcp/client.js";
+import type { Logger } from "../../logger.js";
 
 export class ProductSearchNode extends BaseGraphNode {
   constructor(config: NodeModelConfig) {
     super(config);
   }
 
-  async run(state: ShoppingStateType): Promise<Partial<ShoppingStateType>> {
+  async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
     const { slots } = state;
-    const client = getMcpClient();
 
     try {
       if (slots?.query) {
-        const toolResult = await client.callTool({
-          name: "search_products",
-          arguments: {
-            q: slots.query,
-            limit: 5,
-          },
+        const toolResult = await callTool(log, "search_products", {
+          q: slots.query,
+          limit: 5,
         });
 
         const content = (toolResult.content as any[])?.[0];
@@ -35,13 +32,10 @@ export class ProductSearchNode extends BaseGraphNode {
           };
         }
       } else {
-        const toolResult = await client.callTool({
-          name: "list_products",
-          arguments: {
-            limit: 10,
-            sortBy: slots?.sortBy || "title",
-            order: slots?.order || "asc",
-          },
+        const toolResult = await callTool(log, "list_products", {
+          limit: 10,
+          sortBy: slots?.sortBy || "title",
+          order: slots?.order || "asc",
         });
 
         const content = (toolResult.content as any[])?.[0];
@@ -63,7 +57,7 @@ export class ProductSearchNode extends BaseGraphNode {
         productResults: [],
       };
     } catch (error) {
-      console.error("[ProductSearchNode] Error:", error);
+      log.error({ err: error, slots }, "product search failed");
       return {
         productResults: [],
       };

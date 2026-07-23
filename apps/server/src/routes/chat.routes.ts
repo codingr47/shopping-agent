@@ -3,6 +3,7 @@ import { HumanMessage, AIMessageChunk } from "@langchain/core/messages";
 import { createGraph } from "../graph/graph.js";
 import { updateConversationUpdatedAt, updateConversationTitle, getConversation } from "../db/sqlite.js";
 import { randomUUID } from "crypto";
+import { logger } from "../logger.js";
 
 const router = Router();
 
@@ -22,10 +23,12 @@ const nodeStatusLabels: Record<string, string> = {
 };
 
 router.post("/:id/messages", async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { content } = req.body as ChatRequest;
+  const { id } = req.params;
+  const { content } = req.body as ChatRequest;
+  const requestId = randomUUID();
+  const log = logger.child({ requestId, conversationId: id });
 
+  try {
     if (!content || typeof content !== "string") {
       return res.status(400).json({ error: "content is required" });
     }
@@ -37,14 +40,19 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
 
     const graph = createGraph();
 
-    const config = {
-      configurable: { thread_id: id },
-      streamMode: ["updates", "messages"] as const,
+    const config: any = {
+      configurable: { thread_id: id, requestId },
+      streamMode: ["updates", "messages"],
     };
 
     let productResults: any[] | null = null;
     let categories: string[] | null = null;
     let offTopicMessageEmitted = false;
+
+    log.info({ event: "request.start", method: "POST", path: `/api/conversations/${id}/messages` }, "chat message received");
+
+    const streamStart = performance.now();
+    let chunkCount = 0;
 
     try {
       const stream = await graph.stream(
@@ -52,10 +60,13 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
         config,
       );
 
+      log.debug({ event: "stream.start" }, "starting SSE stream");
+
       for await (const event of stream as any) {
         if (!Array.isArray(event) || event.length !== 2) continue;
 
         const [mode, payload] = event;
+        chunkCount++;
 
         if (mode === "updates") {
           if (!payload || typeof payload !== "object") continue;
@@ -128,6 +139,12 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
       const completeEvent = encodeSSEEvent("done", {});
       res.write(completeEvent);
 
+      const streamDuration = Math.round(performance.now() - streamStart);
+      log.info(
+        { event: "stream.end", durationMs: streamDuration, chunkCount, widgetEmitted: !!productResults },
+        "SSE stream completed",
+      );
+
       updateConversationUpdatedAt(id);
 
       const conversation = getConversation(id);
@@ -136,14 +153,17 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
         updateConversationTitle(id, title);
       }
 
+      const totalDuration = Math.round(performance.now() - streamStart);
+      log.info({ event: "request.end", durationMs: totalDuration, status: 200 }, "chat turn complete");
+
       res.end();
     } catch (streamError) {
-      console.error("[chat.stream] Stream error:", streamError);
+      log.error({ event: "stream.error", err: streamError }, "SSE stream failed");
       res.write(encodeSSEEvent("error", { message: "Stream processing error" }));
       res.end();
     }
   } catch (error) {
-    console.error("[chat.post] Error:", error);
+    log.error({ event: "request.error", err: error }, "chat message handling failed");
     res.status(500).json({ error: "Failed to process message" });
   }
 });

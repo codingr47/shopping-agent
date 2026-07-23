@@ -1,13 +1,14 @@
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType } from "../state.js";
+import type { Logger } from "../../logger.js";
 
 export class SummarizerNode extends BaseGraphNode {
   constructor(config: NodeModelConfig) {
     super(config);
   }
 
-  async run(state: ShoppingStateType): Promise<Partial<ShoppingStateType>> {
+  async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
     const { productResults, productDetail, categories, messages } = state;
 
     const lastUserMessage = messages

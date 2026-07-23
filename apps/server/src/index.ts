@@ -8,23 +8,29 @@ const __dirname = dirname(__filename);
 const rootDir = join(__dirname, "../../..");
 const envPath = join(rootDir, ".env");
 
-console.log(`[dotenv] Loading from: ${envPath}`);
-console.log(`[dotenv] File exists: ${fs.existsSync(envPath)}`);
-
+const envExists = fs.existsSync(envPath);
 const result = dotenv.config({ path: envPath });
-console.log(`[dotenv] Result: ${result.error ? `ERROR: ${result.error.message}` : `OK`}`);
+
+if (result.error) {
+  console.error(`[dotenv] Failed to load ${envPath}: ${result.error.message}`);
+} else {
+  console.log(`[dotenv] Loaded from ${envPath}`);
+}
 
 async function main() {
   const express = (await import("express")).default;
+  const pinoHttp = (await import("pino-http")) as any;
   const { initializeDatabase } = await import("./db/sqlite.js");
   const { initializeMcpClient } = await import("./mcp/client.js");
   const { env } = await import("./env.js");
+  const { logger } = await import("./logger.js");
   const conversationsRouter = (await import("./routes/conversations.routes.js")).default;
   const chatRouter = (await import("./routes/chat.routes.js")).default;
 
   const app = express();
 
   app.use(express.json());
+  app.use(pinoHttp({ logger }));
   app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -35,13 +41,13 @@ async function main() {
     next();
   });
 
-  console.log("[server] Initializing database...");
+  logger.info("initializing database");
   initializeDatabase();
 
-  console.log("[server] Connecting to MCP server...");
+  logger.info("connecting to MCP server");
   await initializeMcpClient();
 
-  console.log("[server] Mounting routes...");
+  logger.info("mounting routes");
   app.use("/api/conversations", conversationsRouter);
   app.use("/api/conversations", chatRouter);
 
@@ -51,11 +57,11 @@ async function main() {
 
   const port = env.PORT;
   app.listen(port, () => {
-    console.log(`[server] Listening on port ${port}`);
+    logger.info({ port }, "server listening");
   });
 }
 
 main().catch(err => {
-  console.error("[server] Fatal error:", err);
+  console.error("[startup] Fatal error:", err);
   process.exit(1);
 });

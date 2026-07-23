@@ -2,6 +2,7 @@ import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType } from "../state.js";
+import type { Logger } from "../../logger.js";
 
 const verdictSchema = z.object({
   verdict: z.enum(["in_scope", "out_of_scope"]),
@@ -19,7 +20,7 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
     super(config);
   }
 
-  async run(state: ShoppingStateType): Promise<Partial<ShoppingStateType>> {
+  async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
     const lastMessage = state.messages[state.messages.length - 1];
 
     if (!lastMessage || lastMessage.getType() !== "human") {
@@ -53,7 +54,10 @@ Set fields to null if they don't apply to this query.`;
         { type: "system" as const, content: systemPrompt },
         new HumanMessage(userPrompt),
       ]);
-    console.log("[GuradRail]", response);
+    log.debug(
+      { event: "guardrail.verdict", verdict: response.verdict, intent: response.intent },
+      "guardrail classified query",
+    );
 
     return {
       guardrailVerdict: response.verdict,

@@ -3,6 +3,7 @@ import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { join, dirname } from "path";
 import fs from "fs";
 import { env } from "../env.js";
+import { logger } from "../logger.js";
 
 let _db: Database.Database | null = null;
 let _checkpointer: SqliteSaver | null = null;
@@ -33,7 +34,7 @@ export function initializeDatabase(): {
 
   createConversationsTable(_db);
 
-  console.log(`[DB] SQLite initialized at ${dbPath}`);
+  logger.info({ dbPath }, "sqlite initialized");
 
   return { db: _db, checkpointer: _checkpointer };
 }
