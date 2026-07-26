@@ -45,7 +45,7 @@ router.get("/", (req: Request, res: Response) => {
   const log = logger.child({ requestId: randomUUID(), route: "list_conversations" });
   try {
     const conversations = listConversations();
-    log.info({ event: "list.success", count: conversations.length }, "conversations listed");
+    log.debug({ event: "list.success", count: conversations.length }, "conversations listed");
     res.json(conversations);
   } catch (error) {
     log.error({ event: "list.error", err: error }, "list conversations failed");
@@ -58,7 +58,7 @@ router.post("/", (req: Request<{}, {}, {}>, res: Response) => {
   try {
     const id = randomUUID();
     const conversation = createConversation(id);
-    log.info({ event: "create.success", conversationId: id }, "conversation created");
+    log.debug({ event: "create.success", conversationId: id }, "conversation created");
     res.json(conversation);
   } catch (error) {
     log.error({ event: "create.error", err: error }, "create conversation failed");
@@ -105,7 +105,7 @@ router.get("/:id", async (req: Request, res: Response) => {
       { event: "get.success", messageCount: chatMessages.length, widgetCount: turnWidgets.length },
       "conversation reconstructed",
     );
-    log.info(
+    log.debug(
       { event: "get.end", conversationId: id, messageCount: chatMessages.length },
       "conversation retrieved",
     );
@@ -125,7 +125,7 @@ router.delete("/:id", (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     deleteConversation(id);
-    log.info({ event: "delete.success", conversationId: id }, "conversation deleted");
+    log.debug({ event: "delete.success", conversationId: id }, "conversation deleted");
     res.json({ success: true });
   } catch (error) {
     log.error({ event: "delete.error", err: error, conversationId: req.params.id }, "delete conversation failed");

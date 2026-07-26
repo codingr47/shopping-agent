@@ -51,12 +51,12 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
       const log = logger.child({ requestId, threadId, node: nodeName });
 
       const start = performance.now();
-      log.info({ event: "node.start" }, `${nodeName} started`);
+      log.debug({ event: "node.start" }, `${nodeName} started`);
 
       try {
         const result = await this.run(state, log);
         const duration = Math.round(performance.now() - start);
-        log.info(
+        log.debug(
           {
             event: "node.end",
             durationMs: duration,

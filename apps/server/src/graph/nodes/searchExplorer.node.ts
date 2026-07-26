@@ -93,7 +93,7 @@ Choose the best tool to help them with their request.`;
       const toolName = toolCall.name;
       const toolArgs = toolCall.args as Record<string, unknown>;
 
-      log.info(
+      log.debug(
         { event: "search.explorer.tool_selected", tool: toolName, args: toolArgs },
         `search explorer selected tool: ${toolName}`,
       );

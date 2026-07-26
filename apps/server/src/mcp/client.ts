@@ -44,7 +44,7 @@ export async function callTool(log: Logger, name: string, args: Record<string, u
     const client = getMcpClient();
     const result = await client.callTool({ name, arguments: args });
     const duration = Math.round(performance.now() - start);
-    log.info(
+    log.debug(
       { event: "mcp.call.end", tool: name, durationMs: duration },
       `MCP call ${name} completed`,
     );

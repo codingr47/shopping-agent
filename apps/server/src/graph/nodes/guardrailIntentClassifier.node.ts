@@ -55,7 +55,25 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
    - order: sort order (asc, desc) if mentioned
 
 Be concise in your reasoning. Consider queries about products, categories, prices, features, availability as in-scope.
-Set fields to null if they don't apply.`;
+Set fields to null if they don't apply.
+
+    # Examples:
+    ## Example 1
+    Fetch category A and get all its' products
+    Thought: The user is asking to 'Fetch category A' and 'get all its' products. He is asking for two actions.
+    intents: [
+      {
+        "type": "browse_category",
+        "node": "searchExplorer",
+        "confidence": <your confidence> 
+      },
+      {
+        "type": "search",
+        "node": "searchExplorer",
+        "confidence": <your confidence>
+      }
+    ]
+`;
 
     const userPrompt = `Classify this user query: "${userQuery}"`;
 
@@ -72,8 +90,16 @@ Set fields to null if they don't apply.`;
       confidence: item.confidence,
     }));
 
-    log.debug(
-      { event: "guardrail.verdict", verdict: response.verdict, intents: intents.length },
+    const slots = {
+        query: response.query || undefined,
+        category: response.category || undefined,
+        productId: response.productId || undefined,
+        sortBy: response.sortBy || undefined,
+        order: response.order || undefined,
+    };
+
+    log.info(
+      { event: "guardrail.verdict", verdict: response.verdict, intents, slots, },
       "guardrail classified query",
     );
 
@@ -82,13 +108,7 @@ Set fields to null if they don't apply.`;
       intents,
       intentCursor: 0,
       currentIntent: undefined,
-      slots: {
-        query: response.query || undefined,
-        category: response.category || undefined,
-        productId: response.productId || undefined,
-        sortBy: response.sortBy || undefined,
-        order: response.order || undefined,
-      },
+      slots,
     };
   }
 }

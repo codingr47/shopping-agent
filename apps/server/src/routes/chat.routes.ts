@@ -52,7 +52,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
     let categories: string[] | null = null;
     let offTopicMessageEmitted = false;
 
-    log.info({ event: "request.start", method: "POST", path: `/api/conversations/${id}/messages` }, "chat message received");
+    log.debug({ event: "request.start", method: "POST", path: `/api/conversations/${id}/messages` }, "chat message received");
 
     const streamStart = performance.now();
     let chunkCount = 0;
@@ -153,7 +153,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
       res.write(completeEvent);
 
       const streamDuration = Math.round(performance.now() - streamStart);
-      log.info(
+      log.debug(
         { event: "stream.end", durationMs: streamDuration, chunkCount, widgetEmitted: !!productResults },
         "SSE stream completed",
       );
@@ -167,7 +167,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
       }
 
       const totalDuration = Math.round(performance.now() - streamStart);
-      log.info({ event: "request.end", durationMs: totalDuration, status: 200 }, "chat turn complete");
+      log.debug({ event: "request.end", durationMs: totalDuration, status: 200 }, "chat turn complete");
 
       res.end();
     } catch (streamError) {

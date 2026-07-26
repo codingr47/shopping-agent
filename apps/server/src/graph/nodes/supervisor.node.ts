@@ -21,12 +21,12 @@ export class SupervisorNode extends BaseGraphNode {
     }
 
     if (cursor >= intents.length) {
-      log.info({ event: "route.decision", cursor, total: intents.length, route: "summarize" }, "supervisor exhausted intents, routing to summarize");
+      log.debug({ event: "route.decision", cursor, total: intents.length, route: "summarize" }, "supervisor exhausted intents, routing to summarize");
       return { route: "summarize", currentIntent: undefined };
     }
 
     const currentIntent = intents[cursor];
-    log.info(
+    log.debug(
       { event: "route.decision", intent: currentIntent.type, confidence: currentIntent.confidence, cursor, total: intents.length, route: "searchExplorer" },
       "supervisor routed to search explorer",
     );
