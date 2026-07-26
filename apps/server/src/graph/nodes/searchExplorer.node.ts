@@ -47,26 +47,13 @@ export class SearchExplorerNode extends BaseGraphNode {
     try {
       const tools = await this.discoverTools();
       const turnIndex = messages.length;
-
-      let slotContext = "";
-      if (currentIntent.slots) {
-        const slots = currentIntent.slots;
-        const slotParts: string[] = [];
-        if (slots.query) slotParts.push(`search query: "${slots.query}"`);
-        if (slots.category) slotParts.push(`category: "${slots.category}"`);
-        if (slots.productId) slotParts.push(`product ID: ${slots.productId}`);
-        if (slots.sortBy) slotParts.push(`sort by: ${slots.sortBy}`);
-        if (slots.order) slotParts.push(`sort order: ${slots.order}`);
-        slotContext = slotParts.length > 0 ? `\nAvailable slots: ${slotParts.join(", ")}` : "";
-      }
-
       const systemPrompt = `You are a shopping assistant with access to product search and discovery tools.
 Your job is to pick the right tool to help the user based on their intent and query.
 The user's detected intent right now is: ${currentIntent.type} (confidence: ${currentIntent.confidence}) — use this as a hint, but feel free to use other tools if they better fit the request.${slotContext}
 
 Use the conversation history below — including any earlier tool calls and results from this turn — to avoid redundant calls and inform your choice.`;
 
-      const modelWithTools = this.llm.bindTools(tools);
+      const modelWithTools = this.llm.bindTools(tools, { parallel_tool_calls: false });
       const response = await modelWithTools.invoke([
         { type: "system" as const, content: systemPrompt },
         ...messages,
@@ -76,6 +63,8 @@ Use the conversation history below — including any earlier tool calls and resu
         log.warn({ event: "search.explorer.no_tool_call" }, "LLM did not select a tool");
         return { productResults: [] };
       }
+
+      log.info({ tool_calls_length: response.tool_calls.length }, "LLM Tool calls length");
 
       const toolCall = response.tool_calls[0];
       const toolName = toolCall.name;

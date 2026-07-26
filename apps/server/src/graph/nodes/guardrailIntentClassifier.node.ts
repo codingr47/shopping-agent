@@ -80,7 +80,7 @@ Set slot fields to null if they don't apply to that intent.
 ${knownStateContext}
 
     # Examples:
-    ## Example 1
+    ## Example 1 - search category and its products
     Fetch category A and get all its' products
     Thought: The user is asking to 'Fetch category A' and 'get all its' products. He is asking for two actions.
     intents: [
@@ -95,6 +95,26 @@ ${knownStateContext}
         "node": "searchExplorer",
         "confidence": <your confidence>,
         "slots": { "query": null, "category": "A", "productId": null, "sortBy": null, "order": null }
+      }
+    ]
+    ## Example 2 - Multi Products Search
+    Fetch details of: 
+    Squishy Pigeon Doll
+    iPhone 15 Plus
+    Thought: The user is asking to 'Fetch details' of 'Squishy Pigeon Doll', 'iPhone 15 Plus'. He is querying for 2 products.
+    intents: 
+    intents: [
+      {
+        "type": "browse_category",
+        "node": "searchExplorer",
+        "confidence": <your confidence>,
+        "slots": { "query": "Squishy Pigeon Doll", "category": null, "productId": null, "sortBy": null, "order": null }
+      },
+      {
+        "type": "search",
+        "node": "searchExplorer",
+        "confidence": <your confidence>,
+        "slots": { "query": "iPhone 15 Plus", "category": null, "productId": null, "sortBy": null, "order": null }
       }
     ]
 `;
