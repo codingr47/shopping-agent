@@ -1,4 +1,4 @@
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
@@ -37,7 +37,7 @@ export class SearchExplorerNode extends BaseGraphNode {
   }
 
   async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
-    const { currentIntent, slots, messages } = state;
+    const { currentIntent, messages } = state;
 
     if (!currentIntent) {
       log.warn({ event: "search.explorer.no_intent" }, "search explorer called without current intent");
@@ -46,42 +46,30 @@ export class SearchExplorerNode extends BaseGraphNode {
 
     try {
       const tools = await this.discoverTools();
-
-      const lastUserMessage = messages
-        .slice()
-        .reverse()
-        .find(msg => msg.getType() === "human");
-
-      const userQuery = lastUserMessage ? lastUserMessage.content : "";
       const turnIndex = messages.length;
-      const intentType = currentIntent.type;
 
       let slotContext = "";
-      if (slots) {
+      if (currentIntent.slots) {
+        const slots = currentIntent.slots;
         const slotParts: string[] = [];
         if (slots.query) slotParts.push(`search query: "${slots.query}"`);
         if (slots.category) slotParts.push(`category: "${slots.category}"`);
         if (slots.productId) slotParts.push(`product ID: ${slots.productId}`);
         if (slots.sortBy) slotParts.push(`sort by: ${slots.sortBy}`);
         if (slots.order) slotParts.push(`sort order: ${slots.order}`);
-        slotContext = slotParts.length > 0 ? `Available slots: ${slotParts.join(", ")}` : "";
+        slotContext = slotParts.length > 0 ? `\nAvailable slots: ${slotParts.join(", ")}` : "";
       }
 
       const systemPrompt = `You are a shopping assistant with access to product search and discovery tools.
 Your job is to pick the right tool to help the user based on their intent and query.
-The user's detected intent is: ${intentType} (as a hint, but feel free to use other tools if they better fit the user's request).
-${slotContext}
+The user's detected intent right now is: ${currentIntent.type} (confidence: ${currentIntent.confidence}) — use this as a hint, but feel free to use other tools if they better fit the request.${slotContext}
 
-Use your judgment and the available tools to provide the best shopping assistance.`;
-
-      const userPrompt = `User asked: "${userQuery}"
-
-Choose the best tool to help them with their request.`;
+Use the conversation history below — including any earlier tool calls and results from this turn — to avoid redundant calls and inform your choice.`;
 
       const modelWithTools = this.llm.bindTools(tools);
       const response = await modelWithTools.invoke([
         { type: "system" as const, content: systemPrompt },
-        new HumanMessage(userPrompt),
+        ...messages,
       ]);
 
       if (!response.tool_calls || response.tool_calls.length === 0) {
@@ -93,7 +81,7 @@ Choose the best tool to help them with their request.`;
       const toolName = toolCall.name;
       const toolArgs = toolCall.args as Record<string, unknown>;
 
-      log.debug(
+      log.info(
         { event: "search.explorer.tool_selected", tool: toolName, args: toolArgs },
         `search explorer selected tool: ${toolName}`,
       );
@@ -101,24 +89,32 @@ Choose the best tool to help them with their request.`;
       const result = await callTool(log, toolName, toolArgs);
       const payload = parseToolResult(result);
 
+      const toolResultMessage = new ToolMessage({
+        content: JSON.stringify(payload),
+        tool_call_id: toolCall.id ?? toolName,
+      });
+      const conversationUpdate = [response, toolResultMessage];
+
       if (toolName === "list_categories") {
-        return { categories: payload.categories };
+        return { categories: payload.categories, messages: conversationUpdate };
       } else if (toolName === "get_product_by_id") {
         const product = payload;
         return {
           productDetail: product,
           productResults: [product],
           turnWidgets: [{ turnIndex, products: [product] }],
+          messages: conversationUpdate,
         };
       } else {
         const products = payload.products || [];
         return {
           productResults: products,
           turnWidgets: products.length > 0 ? [{ turnIndex, products }] : [],
+          messages: conversationUpdate,
         };
       }
     } catch (error) {
-      log.error({ err: error, intent: currentIntent.type, slots }, "search explorer call failed");
+      log.error({ err: error, intent: currentIntent.type, slots: currentIntent.slots }, "search explorer call failed");
       if (currentIntent.type === "product_detail") {
         return { productDetail: undefined };
       }

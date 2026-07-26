@@ -101,9 +101,9 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
       } else if (key === "turnWidgets" && Array.isArray(value)) {
         summary[key] = { count: value.length };
       } else if (
-        key === "slots" ||
+        key === "intents" ||
+        key === "currentIntent" ||
         key === "route" ||
-        key === "intent" ||
         key === "guardrailVerdict" ||
         key === "finalMessage" ||
         key === "productDetail"

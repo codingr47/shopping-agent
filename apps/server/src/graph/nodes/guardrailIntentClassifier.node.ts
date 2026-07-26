@@ -1,23 +1,26 @@
-import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType, IntentItem, INTENT_NODE_MAP } from "../state.js";
 import type { Logger } from "../../logger.js";
 
+const slotsSchema = z.object({
+  query: z.string().nullable(),
+  category: z.string().nullable(),
+  productId: z.number().int().nullable(),
+  sortBy: z.enum(["title", "price", "rating"]).nullable(),
+  order: z.enum(["asc", "desc"]).nullable(),
+});
+
 const intentItemSchema = z.object({
   type: z.enum(["search", "browse_category", "product_detail", "other"]),
   confidence: z.number().min(0).max(1),
+  slots: slotsSchema,
 });
 
 const verdictSchema = z.object({
   verdict: z.enum(["in_scope", "out_of_scope"]),
   intents: z.array(intentItemSchema).min(1).max(3),
   reasoning: z.string(),
-  query: z.string().nullable(),
-  category: z.string().nullable(),
-  productId: z.number().int().nullable(),
-  sortBy: z.enum(["title", "price", "rating"]).nullable(),
-  order: z.enum(["asc", "desc"]).nullable(),
 });
 
 export class GuardrailIntentClassifierNode extends BaseGraphNode {
@@ -37,7 +40,17 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
       };
     }
 
-    const userQuery = lastMessage.content;
+    const knownStateParts: string[] = [];
+    if (state.productDetail) {
+      knownStateParts.push(`Last viewed product: id=${state.productDetail.id}, title="${state.productDetail.title}"`);
+    }
+    if (state.categories && state.categories.length > 0) {
+      knownStateParts.push(`Known categories: ${state.categories.join(", ")}`);
+    }
+    if (state.productResults && state.productResults.length > 0) {
+      knownStateParts.push(`Current result set: ${state.productResults.length} product(s)`);
+    }
+    const knownStateContext = knownStateParts.length > 0 ? knownStateParts.join("\n") : "None.";
 
     const systemPrompt = `You are a shopping assistant intent classifier. Analyze the user's query and determine:
 1. Is it in-scope (related to shopping/product discovery)?
@@ -47,15 +60,24 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
    - product_detail: user wants details about a specific product
    - other: out-of-scope query (weather, politics, etc.)
 3. For each intent, provide a confidence score (0-3 intents max per query).
-4. Extract relevant slots that apply to the ENTIRE query:
-   - query: the search term if user is searching for products
-   - category: the category name if user is browsing by category
-   - productId: the product ID if user is asking about a specific product
-   - sortBy: how to sort results (title, price, rating) if mentioned
-   - order: sort order (asc, desc) if mentioned
+4. For EACH intent, extract the slots that apply to THAT SPECIFIC intent only (not the whole query):
+   - query: the search term, if this intent is a search
+   - category: the category name, if this intent is a category browse
+   - productId: the product ID, if this intent is a product detail lookup
+   - sortBy: how to sort results (title, price, rating), if mentioned for this intent
+   - order: sort order (asc, desc), if mentioned for this intent
+   Slots for one intent must NOT leak into another intent's slots.
+
+   Slot values may be derived from:
+   - The current user message (explicit values)
+   - The conversation history below (e.g. resolving "that product" / "it" to a product mentioned earlier)
+   - The currently known agent state below (e.g. carrying forward a category or product id from a prior turn when the user says "sort those by price" or "tell me more about it")
 
 Be concise in your reasoning. Consider queries about products, categories, prices, features, availability as in-scope.
-Set fields to null if they don't apply.
+Set slot fields to null if they don't apply to that intent.
+
+# Currently known state:
+${knownStateContext}
 
     # Examples:
     ## Example 1
@@ -65,41 +87,40 @@ Set fields to null if they don't apply.
       {
         "type": "browse_category",
         "node": "searchExplorer",
-        "confidence": <your confidence> 
+        "confidence": <your confidence>,
+        "slots": { "query": null, "category": "A", "productId": null, "sortBy": null, "order": null }
       },
       {
         "type": "search",
         "node": "searchExplorer",
-        "confidence": <your confidence>
+        "confidence": <your confidence>,
+        "slots": { "query": null, "category": "A", "productId": null, "sortBy": null, "order": null }
       }
     ]
 `;
-
-    const userPrompt = `Classify this user query: "${userQuery}"`;
 
     const response = await this.llm
       .withStructuredOutput(verdictSchema)
       .invoke([
         { type: "system" as const, content: systemPrompt },
-        new HumanMessage(userPrompt),
+        ...state.messages,
       ]);
 
     const intents: IntentItem[] = response.intents.map(item => ({
       type: item.type,
       node: INTENT_NODE_MAP[item.type],
       confidence: item.confidence,
+      slots: {
+        query: item.slots.query || undefined,
+        category: item.slots.category || undefined,
+        productId: item.slots.productId || undefined,
+        sortBy: item.slots.sortBy || undefined,
+        order: item.slots.order || undefined,
+      },
     }));
 
-    const slots = {
-        query: response.query || undefined,
-        category: response.category || undefined,
-        productId: response.productId || undefined,
-        sortBy: response.sortBy || undefined,
-        order: response.order || undefined,
-    };
-
     log.info(
-      { event: "guardrail.verdict", verdict: response.verdict, intents, slots, },
+      { event: "guardrail.verdict", verdict: response.verdict, intents },
       "guardrail classified query",
     );
 
@@ -108,7 +129,6 @@ Set fields to null if they don't apply.
       intents,
       intentCursor: 0,
       currentIntent: undefined,
-      slots,
     };
   }
 }

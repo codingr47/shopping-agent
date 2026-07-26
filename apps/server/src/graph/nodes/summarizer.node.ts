@@ -1,4 +1,4 @@
-import { HumanMessage, AIMessage } from "@langchain/core/messages";
+import { AIMessage, RemoveMessage } from "@langchain/core/messages";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType } from "../state.js";
 import type { Logger } from "../../logger.js";
@@ -10,13 +10,6 @@ export class SummarizerNode extends BaseGraphNode {
 
   async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
     const { productResults, productDetail, categories, messages } = state;
-
-    const lastUserMessage = messages
-      .slice()
-      .reverse()
-      .find(msg => msg.getType() === "human");
-
-    const userQuery = lastUserMessage ? lastUserMessage.content : "";
 
     const contextParts: string[] = [];
 
@@ -35,17 +28,13 @@ export class SummarizerNode extends BaseGraphNode {
     const systemPrompt = `You are a helpful shopping assistant. The user has just made a request.
 Based on the context provided, generate a brief, friendly response (2-3 sentences max).
 Suggest one natural next step they could take (e.g., "Would you like to see more options?" or "I can show you other items in this category").
-Do NOT describe the products in detail — that's what the product cards are for. Just acknowledge the results and suggest a next action.`;
+Do NOT describe the products in detail — that's what the product cards are for. Just acknowledge the results and suggest a next action.
 
-    const userPrompt = `User asked: "${userQuery}"
+Context: ${contextText}`;
 
-Context: ${contextText}
-
-Generate a brief response and suggest a next step.`;
-    
     const response = await this.llm.invoke([
       { type: "system" as const, content: systemPrompt },
-      new HumanMessage(userPrompt),
+      ...messages,
     ]);
 
     const finalMessage =
@@ -53,9 +42,14 @@ Generate a brief response and suggest a next step.`;
         ? response.content
         : "I found some results for you!";
 
+    const toolArtifacts = messages.filter(
+      m => m.getType() === "tool" || (m instanceof AIMessage && (m.tool_calls?.length ?? 0) > 0)
+    );
+    const removals = toolArtifacts.map(m => new RemoveMessage({ id: m.id! }));
+
     return {
       finalMessage,
-      messages: [new AIMessage(finalMessage)],
+      messages: [...removals, new AIMessage(finalMessage)],
     };
   }
 }

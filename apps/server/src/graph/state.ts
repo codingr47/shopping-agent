@@ -18,6 +18,7 @@ export interface IntentItem {
   type: Intent;
   node: "searchExplorer" | "summarize";
   confidence: number;
+  slots?: Slots;
 }
 
 export const INTENT_NODE_MAP: Record<NonNullable<Intent>, IntentItem["node"]> = {
@@ -54,11 +55,6 @@ export const ShoppingState = Annotation.Root({
   }),
 
   currentIntent: Annotation<IntentItem | undefined>({
-    reducer: (_, r) => r,
-    default: () => undefined,
-  }),
-
-  slots: Annotation<Slots | undefined>({
     reducer: (_, r) => r,
     default: () => undefined,
   }),
