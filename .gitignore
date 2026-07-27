@@ -16,6 +16,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Eval reports
+apps/server/evals/report-output/
+
 # Logs
 *.log
 npm-debug.log*

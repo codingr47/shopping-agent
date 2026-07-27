@@ -7,6 +7,7 @@ export interface EvaluationOutput {
 }
 
 export interface EvalExample {
+  name: string;
   inputs: { prompt: string };
   referenceOutputs: {
     expectedJourney: string[];
@@ -15,4 +16,22 @@ export interface EvalExample {
     forbiddenTools?: string[];
     forbiddenSteps?: string[];
   };
+}
+
+export interface EvaluatorResult {
+  evaluatorKey: string;
+  score: number;
+  comment: string;
+}
+
+export interface RunResult {
+  name: string;
+  prompt: string;
+  repetition: number;
+  journey: string[];
+  selectedIntent: string | undefined;
+  toolCalls: Array<{ name: string; args: unknown }>;
+  latencyMs: number;
+  evaluatorResults: EvaluatorResult[];
+  passed: boolean;
 }

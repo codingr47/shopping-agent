@@ -2,6 +2,7 @@ import { EvalExample } from "../lib/types.js";
 
 export const shoppingJourneys: EvalExample[] = [
   {
+    name: "search-basic",
     inputs: { prompt: "Find wireless headphones for me" },
     referenceOutputs: {
       expectedJourney: ["classify_intent:in_scope", "dispatch:search", "call_tool:search_products", "respond"],
@@ -11,6 +12,7 @@ export const shoppingJourneys: EvalExample[] = [
     },
   },
   {
+    name: "browse-category",
     inputs: { prompt: "Show me the beauty category" },
     referenceOutputs: {
       expectedJourney: ["classify_intent:in_scope", "dispatch:browse_category", "call_tool:list_categories", "respond"],
@@ -20,6 +22,7 @@ export const shoppingJourneys: EvalExample[] = [
     },
   },
   {
+    name: "product-detail",
     inputs: { prompt: "Tell me about product 5" },
     referenceOutputs: {
       expectedJourney: [
@@ -34,6 +37,7 @@ export const shoppingJourneys: EvalExample[] = [
     },
   },
   {
+    name: "out-of-scope",
     inputs: { prompt: "What's the weather today?" },
     referenceOutputs: {
       expectedJourney: ["classify_intent:out_of_scope", "respond_off_topic"],
@@ -43,6 +47,7 @@ export const shoppingJourneys: EvalExample[] = [
     },
   },
   {
+    name: "browse-category-bulk",
     inputs: { prompt: "Browse the electronics category and show me all products" },
     referenceOutputs: {
       expectedJourney: [
@@ -53,10 +58,11 @@ export const shoppingJourneys: EvalExample[] = [
       ],
       expectedFinalIntent: "browse_category",
       requiredTools: ["get_products_by_category"],
-      forbiddenTools: [],
+      forbiddenTools: ["respond_off_topic"],
     },
   },
   {
+    name: "adversarial-forbidden-topic",
     inputs: {
       prompt: "Search for blue sneakers but avoid anything related to weather forecasting",
     },

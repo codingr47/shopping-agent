@@ -1,6 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { runEvalTurn } from "./lib/runEvalTurn.js";
-import { EvaluationOutput, EvalExample } from "./lib/types.js";
+import { EvaluationOutput, EvalExample, RunResult, EvaluatorResult } from "./lib/types.js";
+import fs from "fs";
+import path from "path";
 import { shoppingJourneys } from "./datasets/shoppingJourneys.js";
 import { journeyPassEvaluator, intentAccuracyEvaluator, completionEvaluator, forbiddenStepEvaluator } from "./evaluators/journey.js";
 import {
@@ -11,9 +13,9 @@ import {
 } from "./evaluators/toolMetrics.js";
 import { trajectoryMatchEvaluator } from "./evaluators/trajectory.js";
 import { computeReliability } from "./evaluators/reliability.js";
+import { generateHtmlReport } from "./report/generateReport.js";
 
-//Number of rrepetitions
-const EVAL_REPETITIONS = 1;
+const EVAL_REPETITIONS = 3;
 
 interface CollectedRow {
   inputs: { prompt: string };
@@ -33,10 +35,13 @@ const evaluators = [
 ];
 
 describe("shopping agent journeys", () => {
+  const collected: CollectedRow[] = [];
+  const runResults: RunResult[] = [];
+  let reliabilitySnapshot: ReturnType<typeof computeReliability> | undefined;
+
   it(
     "passes journey/intent/tool checks and meets reliability thresholds",
     async () => {
-      const collected: CollectedRow[] = [];
       const numRepetitions = EVAL_REPETITIONS;
 
       // Run each example numRepetitions times
@@ -45,11 +50,18 @@ describe("shopping agent journeys", () => {
           const outputs = await runEvalTurn(example.inputs.prompt);
           collected.push({ inputs: example.inputs, outputs });
 
+          const evaluatorResults: EvaluatorResult[] = [];
+
           // Run evaluators
           for (const evaluator of evaluators) {
             const result = evaluator.scorer({
               outputs,
               referenceOutputs: example.referenceOutputs,
+            });
+            evaluatorResults.push({
+              evaluatorKey: evaluator.key,
+              score: result.score,
+              comment: result.comment,
             });
             if (result.score < 1) {
               console.warn(
@@ -57,10 +69,23 @@ describe("shopping agent journeys", () => {
               );
             }
           }
+
+          runResults.push({
+            name: example.name,
+            prompt: example.inputs.prompt,
+            repetition: rep,
+            journey: outputs.journey,
+            selectedIntent: outputs.selectedIntent,
+            toolCalls: outputs.toolCalls,
+            latencyMs: outputs.latencyMs,
+            evaluatorResults,
+            passed: evaluatorResults.every(r => r.score === 1),
+          });
         }
       }
 
       const reliability = computeReliability(collected);
+      reliabilitySnapshot = reliability;
 
       // Assertions
       expect(reliability.unstablePrompts, "Should have no unstable prompts").toEqual([]);
@@ -81,4 +106,13 @@ describe("shopping agent journeys", () => {
     },
     300_000,
   );
+
+  afterAll(() => {
+    if (runResults.length === 0 || !reliabilitySnapshot) return;
+    const html = generateHtmlReport(runResults, reliabilitySnapshot);
+    const outDir = path.resolve(__dirname, "report-output");
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(path.join(outDir, "report.html"), html, "utf-8");
+    console.log(`\n📊 Eval report written to ${path.join(outDir, "report.html")}`);
+  });
 });
