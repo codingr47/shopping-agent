@@ -1,4 +1,22 @@
 import { z } from "zod";
+import dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
+
+const envPath = path.resolve(process.cwd(), ".env");
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+} else {
+  const altPath = path.resolve(process.cwd(), "../.env");
+  if (fs.existsSync(altPath)) {
+    dotenv.config({ path: altPath });
+  } else {
+    const rootPath = path.resolve(process.cwd(), "../../.env");
+    if (fs.existsSync(rootPath)) {
+      dotenv.config({ path: rootPath });
+    }
+  }
+}
 
 const envSchema = z.object({
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
@@ -19,6 +37,9 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
+  LANGSMITH_API_KEY: z.string().optional(),
+  LANGSMITH_TRACING: z.string().default("false"),
+  LANGSMITH_PROJECT: z.string().default("shopping-agent"),
 });
 
 export type Environment = z.infer<typeof envSchema>;

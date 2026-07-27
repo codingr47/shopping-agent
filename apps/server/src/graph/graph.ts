@@ -8,7 +8,7 @@ import { SummarizerNode } from "./nodes/summarizer.node.js";
 import { getCheckpointer } from "../db/sqlite.js";
 import { env } from "../env.js";
 
-export function createGraph() {
+export function createGraph(checkpointer: any = getCheckpointer()) {
   const guardrailNode = new GuardrailIntentClassifierNode({
     model: env.NANO_MODEL,
     temperature: 0,
@@ -60,6 +60,5 @@ export function createGraph() {
     .addEdge("summarize", END)
     .addEdge("offTopic", END);
 
-  const checkpointer = getCheckpointer();
   return graph.compile({ checkpointer });
 }
