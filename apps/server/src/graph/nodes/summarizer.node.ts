@@ -9,7 +9,7 @@ export class SummarizerNode extends BaseGraphNode {
   }
 
   async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
-    const { productResults, productDetail, categories, messages } = state;
+    const { productResults, productDetail, categories, messages, turnId } = state;
 
     const contextParts: string[] = [];
 
@@ -43,13 +43,13 @@ Context: ${contextText}`;
         : "I found some results for you!";
 
     const toolArtifacts = messages.filter(
-      m => (m.type === "ai" && (m as any).tool_calls?.length) > 0 || m.type === 'tool'  
+      m => (m.type === "ai" && (m as any).tool_calls?.length) > 0 || m.type === 'tool'
     );
     const removals = toolArtifacts.map(m => new RemoveMessage({ id: m.id! }));
 
     return {
       finalMessage,
-      messages: [...removals, new AIMessage(finalMessage)],
+      messages: [...removals, new AIMessage({ content: finalMessage, id: turnId })],
     };
   }
 }

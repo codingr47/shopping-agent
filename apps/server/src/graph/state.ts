@@ -29,7 +29,7 @@ export const INTENT_NODE_MAP: Record<NonNullable<Intent>, IntentItem["node"]> = 
 };
 
 export interface TurnWidget {
-  turnIndex: number;
+  turnId: string;
   products: ProductSummary[];
 }
 
@@ -80,6 +80,11 @@ export const ShoppingState = Annotation.Root({
   }),
 
   finalMessage: Annotation<string | undefined>({
+    reducer: (_, r) => r,
+    default: () => undefined,
+  }),
+
+  turnId: Annotation<string | undefined>({
     reducer: (_, r) => r,
     default: () => undefined,
   }),

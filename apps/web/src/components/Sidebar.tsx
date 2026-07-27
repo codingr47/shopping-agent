@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { ConversationSummary } from "@shopping-agent/shared";
 import "./Sidebar.css";
 
@@ -6,10 +6,23 @@ interface SidebarProps {
   onSelectThread: (threadId: string) => void;
 }
 
-export function Sidebar({ onSelectThread }: SidebarProps) {
+export interface SidebarHandle {
+  updateConversationTitle: (id: string, title: string) => void;
+}
+
+export const Sidebar = forwardRef<SidebarHandle, SidebarProps>(function Sidebar(
+  { onSelectThread },
+  ref,
+) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    updateConversationTitle: (id: string, title: string) => {
+      setConversations(prev => prev.map(c => (c.id === id ? { ...c, title } : c)));
+    },
+  }));
 
   useEffect(() => {
     fetchConversations();
@@ -81,4 +94,4 @@ export function Sidebar({ onSelectThread }: SidebarProps) {
       </div>
     </div>
   );
-}
+});

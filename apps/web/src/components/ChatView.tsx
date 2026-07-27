@@ -5,6 +5,7 @@ import "./ChatView.css";
 
 interface ChatViewProps {
   threadId: string | null;
+  onTitleUpdate?: (threadId: string, title: string) => void;
 }
 
 interface PendingAssistant {
@@ -13,7 +14,7 @@ interface PendingAssistant {
   parts: ChatMessage["content"];
 }
 
-export function ChatView({ threadId }: ChatViewProps) {
+export function ChatView({ threadId, onTitleUpdate }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pendingAssistant, setPendingAssistant] = useState<PendingAssistant | null>(null);
   const [input, setInput] = useState("");
@@ -101,6 +102,8 @@ export function ChatView({ threadId }: ChatViewProps) {
                   args: data.args,
                   result: data.result,
                 });
+              } else if (data.type === "title-update") {
+                onTitleUpdate?.(data.threadId, data.title);
               }
 
               setPendingAssistant({ ...accumulatedMessage });

@@ -46,7 +46,19 @@ export class SearchExplorerNode extends BaseGraphNode {
 
     try {
       const tools = await this.discoverTools();
-      const turnIndex = messages.length;
+
+      let slotContext = "";
+      if (currentIntent.slots) {
+        const slots = currentIntent.slots;
+        const slotParts: string[] = [];
+        if (slots.query) slotParts.push(`search query: "${slots.query}"`);
+        if (slots.category) slotParts.push(`category: "${slots.category}"`);
+        if (slots.productId) slotParts.push(`product ID: ${slots.productId}`);
+        if (slots.sortBy) slotParts.push(`sort by: ${slots.sortBy}`);
+        if (slots.order) slotParts.push(`sort order: ${slots.order}`);
+        slotContext = slotParts.length > 0 ? `\nAvailable slots: ${slotParts.join(", ")}` : "";
+      }
+
       const systemPrompt = `You are a shopping assistant with access to product search and discovery tools.
 Your job is to pick the right tool to help the user based on their intent and query.
 The user's detected intent right now is: ${currentIntent.type} (confidence: ${currentIntent.confidence}) — use this as a hint, but feel free to use other tools if they better fit the request.${slotContext}
@@ -91,14 +103,14 @@ Use the conversation history below — including any earlier tool calls and resu
         return {
           productDetail: product,
           productResults: [product],
-          turnWidgets: [{ turnIndex, products: [product] }],
+          turnWidgets: state.turnId ? [{ turnId: state.turnId, products: [product] }] : [],
           messages: conversationUpdate,
         };
       } else {
         const products = payload.products || [];
         return {
           productResults: products,
-          turnWidgets: products.length > 0 ? [{ turnIndex, products }] : [],
+          turnWidgets: state.turnId && products.length > 0 ? [{ turnId: state.turnId, products }] : [],
           messages: conversationUpdate,
         };
       }

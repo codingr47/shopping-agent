@@ -90,14 +90,17 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     const turnWidgets = (state.values?.turnWidgets || []) as TurnWidget[];
     for (const widget of turnWidgets) {
-      if (chatMessages[widget.turnIndex]) {
-        chatMessages[widget.turnIndex].content.push({
+      const idx = messages.findIndex(m => m.id === widget.turnId);
+      if (idx !== -1) {
+        chatMessages[idx].content.push({
           type: "tool-call",
           toolCallId: randomUUID(),
           toolName: "render_products",
           args: {},
           result: { products: widget.products },
         });
+      } else {
+        log.warn({ event: "get.widget_orphaned", turnId: widget.turnId }, "turnWidget has no matching message");
       }
     }
 

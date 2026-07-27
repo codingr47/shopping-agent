@@ -42,14 +42,14 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
 
     const graph = createGraph();
+    const turnId = randomUUID();
 
     const config: any = {
       configurable: { thread_id: id, requestId },
       streamMode: ["updates", "messages"],
     };
 
-    let productResults: any[] | null = null;
-    let categories: string[] | null = null;
+    const collectedWidgets: any[] = [];
     let offTopicMessageEmitted = false;
 
     log.debug({ event: "request.start", method: "POST", path: `/api/conversations/${id}/messages` }, "chat message received");
@@ -59,7 +59,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
 
     try {
       const stream = await graph.stream(
-        { messages: [new HumanMessage(content)] },
+        { messages: [new HumanMessage(content)], turnId },
         config,
       );
 
@@ -107,12 +107,8 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
               }
             }
 
-            if (delta.productResults) {
-              productResults = delta.productResults;
-            }
-
-            if (delta.categories) {
-              categories = delta.categories;
+            if (delta.turnWidgets) {
+              collectedWidgets.push(...delta.turnWidgets);
             }
           }
         } else if (mode === "messages") {
@@ -138,13 +134,13 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
         }
       }
 
-      if (productResults && productResults.length > 0) {
+      for (const widget of collectedWidgets) {
         const widgetEvent = encodeSSEEvent("message", {
           type: "tool-call",
           toolCallId: randomUUID(),
           toolName: "render_products",
           args: {},
-          result: { products: productResults },
+          result: { products: widget.products },
         });
         res.write(widgetEvent);
       }
@@ -154,7 +150,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
 
       const streamDuration = Math.round(performance.now() - streamStart);
       log.debug(
-        { event: "stream.end", durationMs: streamDuration, chunkCount, widgetEmitted: !!productResults },
+        { event: "stream.end", durationMs: streamDuration, chunkCount, widgetCount: collectedWidgets.length },
         "SSE stream completed",
       );
 
@@ -164,6 +160,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
       if (conversation && conversation.title === "New conversation") {
         const title = content.length > 50 ? content.substring(0, 47) + "..." : content;
         updateConversationTitle(id, title);
+        res.write(encodeSSEEvent("message", { type: "title-update", threadId: id, title }));
       }
 
       const totalDuration = Math.round(performance.now() - streamStart);
