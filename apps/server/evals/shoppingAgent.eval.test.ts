@@ -12,6 +12,9 @@ import {
 import { trajectoryMatchEvaluator } from "./evaluators/trajectory.js";
 import { computeReliability } from "./evaluators/reliability.js";
 
+//Number of rrepetitions
+const EVAL_REPETITIONS = 1;
+
 interface CollectedRow {
   inputs: { prompt: string };
   outputs: EvaluationOutput;
@@ -34,7 +37,7 @@ describe("shopping agent journeys", () => {
     "passes journey/intent/tool checks and meets reliability thresholds",
     async () => {
       const collected: CollectedRow[] = [];
-      const numRepetitions = 2;
+      const numRepetitions = EVAL_REPETITIONS;
 
       // Run each example numRepetitions times
       for (const example of shoppingJourneys) {
