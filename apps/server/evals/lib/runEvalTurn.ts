@@ -35,50 +35,64 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
     );
 
     for await (const event of stream as any) {
-      if (!Array.isArray(event) || event.length !== 2) continue;
+      if (!Array.isArray(event) || event.length < 2) continue;
 
-      const [nodeName, delta] = event;
+      // Event format: ["updates", {nodeName: {nodeUpdates}}]
+      const [mode, delta] = event;
+      if (mode !== "updates" || !delta || typeof delta !== "object") continue;
 
-      if (delta && typeof delta === "object") {
+      // delta is {nodeName: {...updates...}, ...otherNodes...}
+      const entries = Object.entries(delta) as [string, any][];
+      for (const [nodeName, nodeUpdate] of entries) {
         // Guardrail verdict
-        if (nodeName === "guardrail" && delta.guardrailVerdict) {
-          journey.push(`classify_intent:${delta.guardrailVerdict}`);
+        if (nodeName === "guardrail" && nodeUpdate.guardrailVerdict) {
+          journey.push(`classify_intent:${nodeUpdate.guardrailVerdict}`);
         }
 
         // Supervisor dispatch
-        if (nodeName === "supervisor" && delta.route === "searchExplorer" && delta.currentIntent) {
-          journey.push(`dispatch:${delta.currentIntent.type}`);
-          if (firstDispatch) {
-            selectedIntent = delta.currentIntent.type;
-            firstDispatch = false;
+        if (nodeName === "supervisor") {
+          if (nodeUpdate.route === "searchExplorer" && nodeUpdate.currentIntent) {
+            journey.push(`dispatch:${nodeUpdate.currentIntent.type}`);
+            if (firstDispatch) {
+              selectedIntent = nodeUpdate.currentIntent.type;
+              firstDispatch = false;
+            }
           }
         }
 
         // Tool calls from searchExplorer
-        if (nodeName === "searchExplorer" && delta.messages) {
-          const messages = Array.isArray(delta.messages) ? delta.messages : [delta.messages];
-          for (const msg of messages) {
-            if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-              const toolCall = msg.tool_calls[0];
-              journey.push(`call_tool:${toolCall.name}`);
-              toolCalls.push({
-                name: toolCall.name,
-                args: toolCall.args,
-              });
+        if (nodeName === "searchExplorer") {
+          if (nodeUpdate.messages && Array.isArray(nodeUpdate.messages)) {
+            for (const msg of nodeUpdate.messages) {
+              if (msg && msg.tool_calls && Array.isArray(msg.tool_calls)) {
+                for (const toolCall of msg.tool_calls) {
+                  if (toolCall.name) {
+                    journey.push(`call_tool:${toolCall.name}`);
+                    toolCalls.push({
+                      name: toolCall.name,
+                      args: toolCall.args || {},
+                    });
+                  }
+                }
+              }
             }
           }
         }
 
         // Final response from summarizer
-        if (nodeName === "summarize" && delta.finalMessage) {
-          finalResponse = delta.finalMessage;
-          journey.push("respond");
+        if (nodeName === "summarize" && nodeUpdate.finalMessage) {
+          finalResponse = nodeUpdate.finalMessage;
+          if (!journey.includes("respond")) {
+            journey.push("respond");
+          }
         }
 
         // Off-topic response
-        if (nodeName === "offTopic" && delta.finalMessage) {
-          finalResponse = delta.finalMessage;
-          journey.push("respond_off_topic");
+        if (nodeName === "offTopic" && nodeUpdate.finalMessage) {
+          finalResponse = nodeUpdate.finalMessage;
+          if (!journey.includes("respond_off_topic")) {
+            journey.push("respond_off_topic");
+          }
         }
       }
     }
