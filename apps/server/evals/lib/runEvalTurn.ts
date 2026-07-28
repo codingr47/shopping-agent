@@ -51,7 +51,7 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
 
         // Supervisor dispatch
         if (nodeName === "supervisor") {
-          if (nodeUpdate.route === "searchExplorer" && nodeUpdate.currentIntent) {
+          if (nodeUpdate.route && nodeUpdate.route !== "summarize" && nodeUpdate.currentIntent) {
             journey.push(`dispatch:${nodeUpdate.currentIntent.type}`);
             if (firstDispatch) {
               selectedIntent = nodeUpdate.currentIntent.type;

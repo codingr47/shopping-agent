@@ -2,9 +2,19 @@ import { HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
-import { ShoppingStateType } from "../state.js";
+import { ShoppingStateType, IndexedProduct } from "../state.js";
 import { callTool, parseToolResult, getMcpClient } from "../../mcp/client.js";
 import type { Logger } from "../../logger.js";
+import type { ProductSummary, ProductDetail } from "@shopping-agent/shared";
+
+function toIndexedProduct(product: ProductSummary | ProductDetail): IndexedProduct {
+  if ("shortDescription" in product) {
+    return product as IndexedProduct;
+  }
+  const desc = (product as ProductDetail).description ?? "";
+  const shortDescription = desc.length > 140 ? desc.slice(0, 139) + "…" : desc;
+  return { ...(product as ProductDetail), shortDescription, detail: product as ProductDetail };
+}
 
 export class SearchExplorerNode extends BaseGraphNode {
   private tools: DynamicStructuredTool[] | null = null;
@@ -100,16 +110,20 @@ Use the conversation history below — including any earlier tool calls and resu
         return { categories: payload.categories, messages: conversationUpdate };
       } else if (toolName === "get_product_by_id") {
         const product = payload;
+        const indexedProduct = toIndexedProduct(product);
         return {
           productDetail: product,
           productResults: [product],
-          turnWidgets: state.turnId ? [{ turnId: state.turnId, products: [product] }] : [],
+          productIndex: { [product.id]: indexedProduct },
+          turnWidgets: state.turnId ? [{ turnId: state.turnId, products: [indexedProduct] }] : [],
           messages: conversationUpdate,
         };
       } else {
-        const products = payload.products || [];
+        const products = (payload.products as ProductSummary[]) || [];
+        const indexedProducts = Object.fromEntries(products.map((p: ProductSummary) => [p.id, toIndexedProduct(p)]));
         return {
           productResults: products,
+          productIndex: indexedProducts,
           turnWidgets: state.turnId && products.length > 0 ? [{ turnId: state.turnId, products }] : [],
           messages: conversationUpdate,
         };

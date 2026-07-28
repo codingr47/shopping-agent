@@ -9,10 +9,13 @@ export class SummarizerNode extends BaseGraphNode {
   }
 
   async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
-    const { productResults, productDetail, categories, messages, turnId } = state;
+    const { productResults, productDetail, categories, comparisonResult, messages, turnId } = state;
 
     const contextParts: string[] = [];
 
+    if (comparisonResult) {
+      contextParts.push(`Comparison analysis: ${comparisonResult}`);
+    }
     if (productResults && productResults.length > 0) {
       contextParts.push(`Found ${productResults.length} product(s). Here are the top matches:`);
     }
@@ -29,6 +32,7 @@ export class SummarizerNode extends BaseGraphNode {
 Based on the context provided, generate a brief, friendly response (2-3 sentences max).
 Suggest one natural next step they could take (e.g., "Would you like to see more options?" or "I can show you other items in this category").
 Do NOT describe the products in detail — that's what the product cards are for. Just acknowledge the results and suggest a next action.
+${comparisonResult ? "If a comparison analysis is provided above, you may include its key finding in your response — this overrides the 'no product detail' rule for that specific finding." : ""}
 
 Context: ${contextText}`;
 

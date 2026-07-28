@@ -7,12 +7,13 @@ const slotsSchema = z.object({
   query: z.string().nullable(),
   category: z.string().nullable(),
   productId: z.number().int().nullable(),
+  productIds: z.array(z.number().int()).nullable(),
   sortBy: z.enum(["title", "price", "rating"]).nullable(),
   order: z.enum(["asc", "desc"]).nullable(),
 });
 
 const intentItemSchema = z.object({
-  type: z.enum(["search", "browse_category", "product_detail", "other"]),
+  type: z.enum(["search", "browse_category", "product_detail", "comparison", "other"]),
   confidence: z.number().min(0).max(1),
   slots: slotsSchema,
 });
@@ -41,15 +42,23 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
     }
 
     const knownStateParts: string[] = [];
-    if (state.productDetail) {
-      knownStateParts.push(`Last viewed product: id=${state.productDetail.id}, title="${state.productDetail.title}"`);
+
+    // Cap productIndex listing to ~20 most recent ids to avoid unbounded prompt growth
+    const indexIds = Object.keys(state.productIndex).map(Number).sort((a, b) => b - a).slice(0, 20);
+    if (indexIds.length > 0) {
+      const indexEntries = indexIds
+        .map(id => {
+          const p = state.productIndex[id];
+          return `  id=${id}, "${p.title}", category=${p.category}, $${p.price}`;
+        })
+        .join("\n");
+      knownStateParts.push(`Recently discussed products:\n${indexEntries}`);
     }
+
     if (state.categories && state.categories.length > 0) {
       knownStateParts.push(`Known categories: ${state.categories.join(", ")}`);
     }
-    if (state.productResults && state.productResults.length > 0) {
-      knownStateParts.push(`Current result set: ${state.productResults.length} product(s)`);
-    }
+
     const knownStateContext = knownStateParts.length > 0 ? knownStateParts.join("\n") : "None.";
 
     const systemPrompt = `You are a shopping assistant intent classifier. Analyze the user's query and determine:
@@ -58,12 +67,14 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
    - search: user wants to find/search for products by keyword
    - browse_category: user wants to explore a product category
    - product_detail: user wants details about a specific product
+   - comparison: user wants to compare specific products already discussed, or all products in a known category (e.g., "find the best deal"), without fetching new data
    - other: out-of-scope query (weather, politics, etc.)
 3. For each intent, provide a confidence score (0-3 intents max per query).
 4. For EACH intent, extract the slots that apply to THAT SPECIFIC intent only (not the whole query):
    - query: the search term, if this intent is a search
    - category: the category name, if this intent is a category browse
    - productId: the product ID, if this intent is a product detail lookup
+   - productIds: array of product IDs, if this intent is a comparison (resolve names from conversation history to IDs)
    - sortBy: how to sort results (title, price, rating), if mentioned for this intent
    - order: sort order (asc, desc), if mentioned for this intent
    Slots for one intent must NOT leak into another intent's slots.
@@ -88,33 +99,44 @@ ${knownStateContext}
         "type": "browse_category",
         "node": "searchExplorer",
         "confidence": <your confidence>,
-        "slots": { "query": null, "category": "A", "productId": null, "sortBy": null, "order": null }
+        "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
       },
       {
         "type": "search",
         "node": "searchExplorer",
         "confidence": <your confidence>,
-        "slots": { "query": null, "category": "A", "productId": null, "sortBy": null, "order": null }
+        "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
       }
     ]
     ## Example 2 - Multi Products Search
-    Fetch details of: 
+    Fetch details of:
     Squishy Pigeon Doll
     iPhone 15 Plus
     Thought: The user is asking to 'Fetch details' of 'Squishy Pigeon Doll', 'iPhone 15 Plus'. He is querying for 2 products.
-    intents: 
+    intents:
     intents: [
       {
-        "type": "browse_category",
+        "type": "product_detail",
         "node": "searchExplorer",
         "confidence": <your confidence>,
-        "slots": { "query": "Squishy Pigeon Doll", "category": null, "productId": null, "sortBy": null, "order": null }
+        "slots": { "query": null, "category": null, "productId": <id resolved from "Squishy Pigeon Doll">, "productIds": null, "sortBy": null, "order": null }
       },
       {
-        "type": "search",
+        "type": "product_detail",
         "node": "searchExplorer",
         "confidence": <your confidence>,
-        "slots": { "query": "iPhone 15 Plus", "category": null, "productId": null, "sortBy": null, "order": null }
+        "slots": { "query": null, "category": null, "productId": <id resolved from "iPhone 15 Plus">, "productIds": null, "sortBy": null, "order": null }
+      }
+    ]
+    ## Example 3 - Compare products
+    Compare product A and product B for me, which one is better?
+    Thought: The user is asking to compare two specific products already discussed. Resolve the product names from the conversation history to their IDs.
+    intents: [
+      {
+        "type": "comparison",
+        "node": "comparison",
+        "confidence": <your confidence>,
+        "slots": { "query": null, "category": null, "productId": null, "productIds": [<id of product A>, <id of product B>], "sortBy": null, "order": null }
       }
     ]
 `;
@@ -134,6 +156,7 @@ ${knownStateContext}
         query: item.slots.query || undefined,
         category: item.slots.category || undefined,
         productId: item.slots.productId || undefined,
+        productIds: item.slots.productIds?.length ? item.slots.productIds : undefined,
         sortBy: item.slots.sortBy || undefined,
         order: item.slots.order || undefined,
       },

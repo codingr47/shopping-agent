@@ -23,6 +23,7 @@ const intentStatusLabels: Record<string, string> = {
   search: "Searching for products…",
   browse_category: "Browsing categories…",
   product_detail: "Looking up product details…",
+  comparison: "Comparing products…",
 };
 
 router.post("/:id/messages", async (req: Request, res: Response) => {
@@ -95,7 +96,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
                   label: nodeStatusLabels[nodeName],
                 }),
               );
-            } else if (nodeName === "supervisor" && delta.route === "searchExplorer" && delta.currentIntent) {
+            } else if (nodeName === "supervisor" && delta.route && delta.route !== "summarize" && delta.currentIntent) {
               const intentLabel = intentStatusLabels[delta.currentIntent.type];
               if (intentLabel) {
                 res.write(

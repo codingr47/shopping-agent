@@ -3,6 +3,7 @@ import { ShoppingState, type ShoppingStateType } from "./state.js";
 import { GuardrailIntentClassifierNode } from "./nodes/guardrailIntentClassifier.node.js";
 import { SupervisorNode } from "./nodes/supervisor.node.js";
 import { SearchExplorerNode } from "./nodes/searchExplorer.node.js";
+import { ComparisonNode } from "./nodes/comparison.node.js";
 import { OffTopicResponderNode } from "./nodes/offTopic.node.js";
 import { SummarizerNode } from "./nodes/summarizer.node.js";
 import { getCheckpointer } from "../db/sqlite.js";
@@ -23,6 +24,10 @@ export function createGraph(checkpointer: any = getCheckpointer()) {
     model: env.NANO_MODEL,
   });
 
+  const comparisonNode = new ComparisonNode({
+    model: env.MINI_MODEL,
+  });
+
   const offTopicNode = new OffTopicResponderNode({
     model: env.NANO_MODEL,
   });
@@ -36,6 +41,7 @@ export function createGraph(checkpointer: any = getCheckpointer()) {
     .addNode("guardrail", guardrailNode.toNodeFn())
     .addNode("supervisor", supervisorNode.toNodeFn())
     .addNode("searchExplorer", searchExplorerNode.toNodeFn())
+    .addNode("comparison", comparisonNode.toNodeFn())
     .addNode("offTopic", offTopicNode.toNodeFn())
     .addNode("summarize", summarizerNode.toNodeFn())
     .addEdge(START, "guardrail")
@@ -53,10 +59,12 @@ export function createGraph(checkpointer: any = getCheckpointer()) {
       },
       {
         searchExplorer: "searchExplorer",
+        comparison: "comparison",
         summarize: "summarize",
       },
     )
     .addEdge("searchExplorer", "supervisor")
+    .addEdge("comparison", "supervisor")
     .addEdge("summarize", END)
     .addEdge("offTopic", END);
 
