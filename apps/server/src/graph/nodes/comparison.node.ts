@@ -91,7 +91,11 @@ ${productsText}
 
 Focus on key differences: price, value, features, and availability. Be specific and actionable. Keep your response to 2-3 sentences unless the question asks for more detail.
 
-In your structured output, list the product ID(s) your answer specifically names or recommends (e.g., just the cheapest one for a 'best deal' question, or both ids for an A-vs-B comparison).`;
+CRITICAL: In your structured output, you MUST extract and list ONLY the product ID(s) that your answer specifically names, recommends, or declares as the winner.
+Examples:
+- For "find the cheapest": referencedProductIds should contain ONLY the ID of the cheapest product (e.g., [5] if product 5 is cheapest)
+- For "compare A and B": referencedProductIds should contain [id_of_A, id_of_B]
+- Do NOT include products you merely analyzed but didn't recommend in your final answer`;
 
       const response = await this.llm
         .withStructuredOutput(comparisonOutputSchema)
@@ -99,6 +103,11 @@ In your structured output, list the product ID(s) your answer specifically names
           { type: "system" as const, content: systemPrompt },
           ...messages,
         ]);
+
+      log.debug(
+        { event: "comparison.response", referencedProductIds: response.referencedProductIds, answerPreview: response.answer.slice(0, 100) },
+        "structured output received",
+      );
 
       const referencedIds = new Set(response.referencedProductIds);
       const widgetProducts = resolvedProducts.filter(p => referencedIds.has(p.id));
@@ -109,8 +118,10 @@ In your structured output, list the product ID(s) your answer specifically names
           event: "comparison.success",
           productCount: resolvedProducts.length,
           referencedCount: widgetProducts.length,
+          finalCount: finalWidgetProducts.length,
           sortBy: slots.sortBy,
           order: slots.order,
+          usedFallback: widgetProducts.length === 0,
         },
         "comparison analysis complete",
       );
