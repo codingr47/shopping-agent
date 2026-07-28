@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatMessage, ProductSummary } from "@shopping-agent/shared";
 import { ProductGrid } from "./product/ProductGrid.js";
+import { renderMarkdown } from "../lib/markdown.js";
 import "./ChatView.css";
 
 interface ChatViewProps {
@@ -153,9 +154,9 @@ export function ChatView({ threadId, onTitleUpdate }: ChatViewProps) {
               {msg.content.map((part, pIdx) => {
                 if (part.type === "text" && "text" in part) {
                   return (
-                    <p key={pIdx} className="text-part">
-                      {(part as any).text}
-                    </p>
+                    <div key={pIdx} className="text-part">
+                      {renderMarkdown((part as any).text)}
+                    </div>
                   );
                 } else if (part.type === "tool-call" && (part as any).toolName === "render_products") {
                   return (
@@ -175,7 +176,7 @@ export function ChatView({ threadId, onTitleUpdate }: ChatViewProps) {
           <div className="message assistant">
             <div className="message-content">
               {pendingAssistant.text.length > 0 ? (
-                <p className="text-part">{pendingAssistant.text}</p>
+                <div className="text-part">{renderMarkdown(pendingAssistant.text)}</div>
               ) : pendingAssistant.statusLabel ? (
                 <div className="pending-message">
                   <div className="typing-indicator">

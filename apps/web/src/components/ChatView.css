@@ -68,6 +68,38 @@
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.text-part p,
+.markdown-p {
+  margin: 0 0 0.5em 0;
+  line-height: 1.4;
+}
+
+.text-part p:last-child,
+.markdown-p:last-child {
+  margin-bottom: 0;
+}
+
+.text-part ul,
+.text-part ol,
+.markdown-ul,
+.markdown-ol {
+  margin: 0.25em 0 0.5em 0;
+  padding-left: 1.25em;
+}
+
+.text-part li,
+.markdown-ul li,
+.markdown-ol li {
+  margin: 0.15em 0;
+}
+
+.text-part strong {
+  font-weight: 600;
 }
 
 .chat-input {
