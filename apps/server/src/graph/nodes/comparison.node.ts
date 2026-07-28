@@ -1,6 +1,12 @@
+import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
 import { ShoppingStateType, IndexedProduct } from "../state.js";
 import type { Logger } from "../../logger.js";
+
+const comparisonOutputSchema = z.object({
+  answer: z.string(),
+  referencedProductIds: z.array(z.number().int()),
+});
 
 export class ComparisonNode extends BaseGraphNode {
   constructor(config: NodeModelConfig) {
@@ -83,23 +89,35 @@ export class ComparisonNode extends BaseGraphNode {
 
 ${productsText}
 
-Focus on key differences: price, value, features, and availability. Be specific and actionable. Keep your response to 2-3 sentences unless the question asks for more detail.`;
+Focus on key differences: price, value, features, and availability. Be specific and actionable. Keep your response to 2-3 sentences unless the question asks for more detail.
 
-      const response = await this.llm.invoke([
-        { type: "system" as const, content: systemPrompt },
-        ...messages,
-      ]);
+In your structured output, list the product ID(s) your answer specifically names or recommends (e.g., just the cheapest one for a 'best deal' question, or both ids for an A-vs-B comparison).`;
 
-      const comparisonResult = typeof response.content === "string" ? response.content : "Unable to generate comparison.";
+      const response = await this.llm
+        .withStructuredOutput(comparisonOutputSchema)
+        .invoke([
+          { type: "system" as const, content: systemPrompt },
+          ...messages,
+        ]);
+
+      const referencedIds = new Set(response.referencedProductIds);
+      const widgetProducts = resolvedProducts.filter(p => referencedIds.has(p.id));
+      const finalWidgetProducts = widgetProducts.length > 0 ? widgetProducts : resolvedProducts;
 
       log.info(
-        { event: "comparison.success", productCount: resolvedProducts.length, sortBy: slots.sortBy, order: slots.order },
+        {
+          event: "comparison.success",
+          productCount: resolvedProducts.length,
+          referencedCount: widgetProducts.length,
+          sortBy: slots.sortBy,
+          order: slots.order,
+        },
         "comparison analysis complete",
       );
 
       return {
-        comparisonResult,
-        turnWidgets: turnId ? [{ turnId, products: resolvedProducts }] : [],
+        comparisonResult: response.answer,
+        turnWidgets: turnId ? [{ turnId, products: finalWidgetProducts }] : [],
       };
     } catch (error) {
       log.error({ err: error, intent: currentIntent.type }, "comparison analysis failed");
