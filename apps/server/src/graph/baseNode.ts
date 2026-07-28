@@ -94,20 +94,11 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
               ? (value[value.length - 1].content as string).slice(0, 120)
               : undefined,
         };
-      } else if (key === "productResults" && Array.isArray(value)) {
+      } else if (Array.isArray(value)) {
         summary[key] = { count: value.length };
-      } else if (key === "categories" && Array.isArray(value)) {
-        summary[key] = { count: value.length };
-      } else if (key === "turnWidgets" && Array.isArray(value)) {
-        summary[key] = { count: value.length };
-      } else if (
-        key === "intents" ||
-        key === "currentIntent" ||
-        key === "route" ||
-        key === "guardrailVerdict" ||
-        key === "finalMessage" ||
-        key === "productDetail"
-      ) {
+      } else if (typeof value === "object" && value !== null) {
+        summary[key] = { count: Object.keys(value).length };
+      } else {
         summary[key] = value;
       }
     }

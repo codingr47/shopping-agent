@@ -2,7 +2,7 @@ import { HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
-import { ShoppingStateType, IndexedProduct } from "../state.js";
+import { ShoppingStateType, IndexedProduct, Slots } from "../state.js";
 import { callTool, parseToolResult, getMcpClient } from "../../mcp/client.js";
 import type { Logger } from "../../logger.js";
 import type { ProductSummary, ProductDetail } from "@shopping-agent/shared";
@@ -14,6 +14,50 @@ function toIndexedProduct(product: ProductSummary | ProductDetail): IndexedProdu
   const desc = (product as ProductDetail).description ?? "";
   const shortDescription = desc.length > 140 ? desc.slice(0, 139) + "…" : desc;
   return { ...(product as ProductDetail), shortDescription, detail: product as ProductDetail };
+}
+
+function describeSlots(slots: Slots): string {
+  const parts = Object.entries(slots)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0))
+    .map(([key, v]) => `${key}: ${Array.isArray(v) ? v.join(", ") : v}`);
+  return parts.length > 0 ? `\nAvailable slots: ${parts.join(", ")}` : "";
+}
+
+function deriveStateFromPayload(
+  payload: unknown,
+  state: ShoppingStateType,
+  log: Logger,
+): Partial<ShoppingStateType> {
+  if (payload && typeof payload === "object" && Array.isArray((payload as any).categories)) {
+    return { categories: (payload as any).categories };
+  }
+
+  if (payload && typeof payload === "object" && Array.isArray((payload as any).products)) {
+    const products = (payload as any).products as ProductSummary[];
+    const indexedProducts = Object.fromEntries(products.map(p => [p.id, toIndexedProduct(p)]));
+    return {
+      productResults: products,
+      productIndex: indexedProducts,
+      turnWidgets: state.turnId && products.length > 0 ? [{ turnId: state.turnId, products }] : [],
+    };
+  }
+
+  if (payload && typeof payload === "object" && typeof (payload as any).id === "number" && typeof (payload as any).title === "string") {
+    const productDetail = payload as ProductDetail;
+    const indexedProduct = toIndexedProduct(productDetail);
+    return {
+      productDetail,
+      productResults: [indexedProduct],
+      productIndex: { [productDetail.id]: indexedProduct },
+      turnWidgets: state.turnId ? [{ turnId: state.turnId, products: [indexedProduct] }] : [],
+    };
+  }
+
+  log.warn(
+    { event: "search.explorer.unknown_payload_shape", payloadKeys: Object.keys(payload ?? {}) },
+    "tool payload shape not recognized",
+  );
+  return { productResults: [] };
 }
 
 export class SearchExplorerNode extends BaseGraphNode {
@@ -57,17 +101,7 @@ export class SearchExplorerNode extends BaseGraphNode {
     try {
       const tools = await this.discoverTools();
 
-      let slotContext = "";
-      if (currentIntent.slots) {
-        const slots = currentIntent.slots;
-        const slotParts: string[] = [];
-        if (slots.query) slotParts.push(`search query: "${slots.query}"`);
-        if (slots.category) slotParts.push(`category: "${slots.category}"`);
-        if (slots.productId) slotParts.push(`product ID: ${slots.productId}`);
-        if (slots.sortBy) slotParts.push(`sort by: ${slots.sortBy}`);
-        if (slots.order) slotParts.push(`sort order: ${slots.order}`);
-        slotContext = slotParts.length > 0 ? `\nAvailable slots: ${slotParts.join(", ")}` : "";
-      }
+      const slotContext = currentIntent.slots ? describeSlots(currentIntent.slots) : "";
 
       const systemPrompt = `You are a shopping assistant with access to product search and discovery tools.
 Your job is to pick the right tool to help the user based on their intent and query.
@@ -106,28 +140,8 @@ Use the conversation history below — including any earlier tool calls and resu
       });
       const conversationUpdate = [response, toolResultMessage];
 
-      if (toolName === "list_categories") {
-        return { categories: payload.categories, messages: conversationUpdate };
-      } else if (toolName === "get_product_by_id") {
-        const product = payload;
-        const indexedProduct = toIndexedProduct(product);
-        return {
-          productDetail: product,
-          productResults: [product],
-          productIndex: { [product.id]: indexedProduct },
-          turnWidgets: state.turnId ? [{ turnId: state.turnId, products: [indexedProduct] }] : [],
-          messages: conversationUpdate,
-        };
-      } else {
-        const products = (payload.products as ProductSummary[]) || [];
-        const indexedProducts = Object.fromEntries(products.map((p: ProductSummary) => [p.id, toIndexedProduct(p)]));
-        return {
-          productResults: products,
-          productIndex: indexedProducts,
-          turnWidgets: state.turnId && products.length > 0 ? [{ turnId: state.turnId, products }] : [],
-          messages: conversationUpdate,
-        };
-      }
+      const payloadState = deriveStateFromPayload(payload, state, log);
+      return { ...payloadState, messages: conversationUpdate };
     } catch (error) {
       log.error({ err: error, intent: currentIntent.type, slots: currentIntent.slots }, "search explorer call failed");
       if (currentIntent.type === "product_detail") {

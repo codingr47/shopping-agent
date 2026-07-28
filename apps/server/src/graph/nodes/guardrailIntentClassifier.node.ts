@@ -90,55 +90,55 @@ Set slot fields to null if they don't apply to that intent.
 # Currently known state:
 ${knownStateContext}
 
-    # Examples:
-    ## Example 1 - search category and its products
-    Fetch category A and get all its' products
-    Thought: The user is asking to 'Fetch category A' and 'get all its' products. He is asking for two actions.
-    intents: [
-      {
-        "type": "browse_category",
-        "node": "searchExplorer",
-        "confidence": <your confidence>,
-        "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
-      },
-      {
-        "type": "search",
-        "node": "searchExplorer",
-        "confidence": <your confidence>,
-        "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
-      }
-    ]
-    ## Example 2 - Multi Products Search
-    Fetch details of:
-    Squishy Pigeon Doll
-    iPhone 15 Plus
-    Thought: The user is asking to 'Fetch details' of 'Squishy Pigeon Doll', 'iPhone 15 Plus'. He is querying for 2 products.
-    intents:
-    intents: [
-      {
-        "type": "product_detail",
-        "node": "searchExplorer",
-        "confidence": <your confidence>,
-        "slots": { "query": null, "category": null, "productId": <id resolved from "Squishy Pigeon Doll">, "productIds": null, "sortBy": null, "order": null }
-      },
-      {
-        "type": "product_detail",
-        "node": "searchExplorer",
-        "confidence": <your confidence>,
-        "slots": { "query": null, "category": null, "productId": <id resolved from "iPhone 15 Plus">, "productIds": null, "sortBy": null, "order": null }
-      }
-    ]
-    ## Example 3 - Compare products
-    Compare product A and product B for me, which one is better?
-    Thought: The user is asking to compare two specific products already discussed. Resolve the product names from the conversation history to their IDs.
-    intents: [
-      {
-        "type": "comparison",
-        "node": "comparison",
-        "confidence": <your confidence>,
-        "slots": { "query": null, "category": null, "productId": null, "productIds": [<id of product A>, <id of product B>], "sortBy": null, "order": null }
-      }
-    ]
+# Examples:
+## Example 1 - search category and its products
+Fetch category A and get all its' products
+Thought: The user is asking to 'Fetch category A' and 'get all its' products. He is asking for two actions.
+intents: [
+  {
+    "type": "browse_category",
+    "node": "searchExplorer",
+    "confidence": <your confidence>,
+    "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
+  },
+  {
+    "type": "search",
+    "node": "searchExplorer",
+    "confidence": <your confidence>,
+    "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
+  }
+]
+## Example 2 - Multi Products Search
+Fetch details of:
+Squishy Pigeon Doll
+iPhone 15 Plus
+Thought: The user is asking to 'Fetch details' of 'Squishy Pigeon Doll', 'iPhone 15 Plus'. He is querying for 2 products.
+intents:
+intents: [
+  {
+    "type": "product_detail",
+    "node": "searchExplorer",
+    "confidence": <your confidence>,
+    "slots": { "query": null, "category": null, "productId": <id resolved from "Squishy Pigeon Doll">, "productIds": null, "sortBy": null, "order": null }
+  },
+  {
+    "type": "product_detail",
+    "node": "searchExplorer",
+    "confidence": <your confidence>,
+    "slots": { "query": null, "category": null, "productId": <id resolved from "iPhone 15 Plus">, "productIds": null, "sortBy": null, "order": null }
+  }
+]
+## Example 3 - Compare products
+Compare product A and product B for me, which one is better?
+Thought: The user is asking to compare two specific products already discussed. Resolve the product names from the conversation history to their IDs.
+intents: [
+  {
+    "type": "comparison",
+    "node": "comparison",
+    "confidence": <your confidence>,
+    "slots": { "query": null, "category": null, "productId": null, "productIds": [<id of product A>, <id of product B>], "sortBy": null, "order": null }
+  }
+]
 `;
 
     const response = await this.llm

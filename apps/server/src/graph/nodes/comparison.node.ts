@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { BaseGraphNode, NodeModelConfig } from "../baseNode.js";
-import { ShoppingStateType, IndexedProduct } from "../state.js";
+import { ShoppingStateType, IndexedProduct, Slots } from "../state.js";
 import type { Logger } from "../../logger.js";
+
+type ProductResolver = (slots: Slots, productIndex: Record<number, IndexedProduct>) => IndexedProduct[] | undefined;
 
 const comparisonOutputSchema = z.object({
   answer: z.string(),
@@ -9,23 +11,48 @@ const comparisonOutputSchema = z.object({
 });
 
 export class ComparisonNode extends BaseGraphNode {
+  private readonly PRODUCT_RESOLVERS: ProductResolver[] = [
+    (slots, index) =>
+      slots.productIds?.length
+        ? slots.productIds.map(id => index[id]).filter((p): p is IndexedProduct => p !== undefined)
+        : undefined,
+    (slots, index) =>
+      slots.category ? Object.values(index).filter(p => p.category === slots.category) : undefined,
+  ];
+
   constructor(config: NodeModelConfig) {
     super(config);
   }
 
-  private sortProducts(products: IndexedProduct[], sortBy?: string, order?: string): IndexedProduct[] {
+  private resolveProducts(slots: Slots, productIndex: Record<number, IndexedProduct>): IndexedProduct[] {
+    for (const resolve of this.PRODUCT_RESOLVERS) {
+      const result = resolve(slots, productIndex);
+      if (result !== undefined) return result;
+    }
+    return [];
+  }
+
+  private sortProducts(products: IndexedProduct[], sortBy?: Slots["sortBy"], order?: Slots["order"]): IndexedProduct[] {
     if (!sortBy) return products;
 
-    const sorted = [...products];
-    const isAsc = order === "asc";
+    const SORT_ACCESSORS: Record<NonNullable<Slots["sortBy"]>, (p: IndexedProduct) => number | string> = {
+      price: p => p.price,
+      rating: p => p.rating,
+      title: p => p.title,
+    };
 
-    if (sortBy === "price") {
-      sorted.sort((a, b) => (isAsc ? a.price - b.price : b.price - a.price));
-    } else if (sortBy === "rating") {
-      sorted.sort((a, b) => (isAsc ? a.rating - b.rating : b.rating - a.rating));
-    } else if (sortBy === "title") {
-      sorted.sort((a, b) => (isAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)));
-    }
+    const accessor = SORT_ACCESSORS[sortBy];
+    if (!accessor) return products;
+
+    const isAsc = order === "asc";
+    const sorted = [...products];
+
+    sorted.sort((a, b) => {
+      const av = accessor(a);
+      const bv = accessor(b);
+      const cmp = typeof av === "string" ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+      return isAsc ? cmp : -cmp;
+    });
 
     return sorted;
   }
@@ -40,11 +67,17 @@ export class ComparisonNode extends BaseGraphNode {
     lines.push(`Description: ${product.shortDescription}`);
 
     if (product.detail) {
-      const detail = product.detail;
-      if (detail.stock) lines.push(`Stock: ${detail.stock}`);
-      if (detail.brand) lines.push(`Brand: ${detail.brand}`);
-      if (detail.discountPercentage) lines.push(`Discount: ${detail.discountPercentage}%`);
-      if (detail.availabilityStatus) lines.push(`Availability: ${detail.availabilityStatus}`);
+      const DETAIL_FIELD_LABELS: Array<{ key: keyof typeof product.detail; label: string; format?: (v: unknown) => string }> = [
+        { key: "stock", label: "Stock" },
+        { key: "brand", label: "Brand" },
+        { key: "discountPercentage", label: "Discount", format: v => `${v}%` },
+        { key: "availabilityStatus", label: "Availability" },
+      ];
+
+      for (const { key, label, format } of DETAIL_FIELD_LABELS) {
+        const v = product.detail[key];
+        if (v) lines.push(`${label}: ${format ? format(v) : v}`);
+      }
     }
 
     return lines.join("\n");
@@ -60,18 +93,8 @@ export class ComparisonNode extends BaseGraphNode {
 
     const slots = currentIntent.slots || {};
 
-    // Resolve target products
-    let resolvedProducts: IndexedProduct[] = [];
-
-    if (slots.productIds && slots.productIds.length > 0) {
-      // Direct product ID lookup
-      resolvedProducts = slots.productIds
-        .map(id => productIndex[id])
-        .filter((p): p is IndexedProduct => p !== undefined);
-    } else if (slots.category) {
-      // Filter by category
-      resolvedProducts = Object.values(productIndex).filter(p => p.category === slots.category);
-    }
+    // Resolve target products using priority-ordered resolver chain
+    const resolvedProducts = this.resolveProducts(slots, productIndex);
 
     if (resolvedProducts.length === 0) {
       log.info({ event: "comparison.no_products" }, "no products found to compare");
@@ -79,11 +102,11 @@ export class ComparisonNode extends BaseGraphNode {
     }
 
     // Apply sorting if specified
-    resolvedProducts = this.sortProducts(resolvedProducts, slots.sortBy, slots.order);
+    const sortedProducts = this.sortProducts(resolvedProducts, slots.sortBy, slots.order);
 
     try {
       // Format products for LLM analysis
-      const productsText = resolvedProducts.map((p, i) => `Product ${i + 1}:\n${this.formatProductForAnalysis(p)}`).join("\n\n");
+      const productsText = sortedProducts.map((p, i) => `Product ${i + 1}:\n${this.formatProductForAnalysis(p)}`).join("\n\n");
 
       const systemPrompt = `You are a product comparison expert. Analyze the following products and answer the user's comparison question directly and concisely.
 
@@ -110,8 +133,8 @@ Examples:
       );
 
       const referencedIds = new Set(response.referencedProductIds);
-      const widgetProducts = resolvedProducts.filter(p => referencedIds.has(p.id));
-      const finalWidgetProducts = widgetProducts.length > 0 ? widgetProducts : resolvedProducts;
+      const widgetProducts = sortedProducts.filter(p => referencedIds.has(p.id));
+      const finalWidgetProducts = widgetProducts.length > 0 ? widgetProducts : sortedProducts;
 
       log.info(
         {
