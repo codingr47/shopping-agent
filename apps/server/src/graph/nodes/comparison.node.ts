@@ -120,11 +120,13 @@ Examples:
 - For "compare A and B": referencedProductIds should contain [id_of_A, id_of_B]
 - Do NOT include products you merely analyzed but didn't recommend in your final answer`;
 
+      const windowedMessages = await this.selectContextWindow(messages);
+
       const response = await this.llm
         .withStructuredOutput(comparisonOutputSchema)
         .invoke([
           { type: "system" as const, content: systemPrompt },
-          ...messages,
+          ...windowedMessages,
         ]);
 
       log.debug(

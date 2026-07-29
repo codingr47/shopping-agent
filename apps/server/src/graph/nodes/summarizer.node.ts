@@ -50,9 +50,11 @@ ${extraInstructions ? extraInstructions : ""}
 
 Context: ${contextText}`;
 
+    const windowedMessages = await this.selectContextWindow(messages);
+
     const response = await this.llm.invoke([
       { type: "system" as const, content: systemPrompt },
-      ...messages,
+      ...windowedMessages,
     ]);
 
     const finalMessage =

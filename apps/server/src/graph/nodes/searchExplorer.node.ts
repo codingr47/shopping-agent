@@ -109,10 +109,12 @@ The user's detected intent right now is: ${currentIntent.type} (confidence: ${cu
 
 Use the conversation history below — including any earlier tool calls and results from this turn — to avoid redundant calls and inform your choice.`;
 
+      const windowedMessages = await this.selectContextWindow(messages);
+
       const modelWithTools = this.llm.bindTools(tools, { parallel_tool_calls: false });
       const response = await modelWithTools.invoke([
         { type: "system" as const, content: systemPrompt },
-        ...messages,
+        ...windowedMessages,
       ]);
 
       if (!response.tool_calls || response.tool_calls.length === 0) {

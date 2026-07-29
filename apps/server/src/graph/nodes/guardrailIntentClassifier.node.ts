@@ -141,11 +141,13 @@ intents: [
 ]
 `;
 
+    const windowedMessages = await this.selectContextWindow(state.messages);
+
     const response = await this.llm
       .withStructuredOutput(verdictSchema)
       .invoke([
         { type: "system" as const, content: systemPrompt },
-        ...state.messages,
+        ...windowedMessages,
       ]);
 
     const intents: IntentItem[] = response.intents.map(item => ({

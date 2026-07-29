@@ -37,6 +37,11 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
+  MAX_CONTEXT_SIZE: z
+    .string()
+    .default("8000")
+    .transform(val => parseInt(val, 10))
+    .pipe(z.number().int().positive()),
 });
 
 export type Environment = z.infer<typeof envSchema>;

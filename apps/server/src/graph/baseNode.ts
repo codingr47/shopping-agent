@@ -1,6 +1,9 @@
+import { BaseMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { ShoppingStateType } from "./state.js";
 import { logger, type Logger } from "../logger.js";
+import { selectContextWindow } from "./contextWindow.js";
+import { env } from "../env.js";
 import type { RunnableConfig } from "@langchain/core/runnables";
 
 export interface NodeModelConfig {
@@ -42,6 +45,10 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
   }
 
   abstract run(state: TState, log: Logger): Promise<Partial<TState>>;
+
+  protected async selectContextWindow(messages: BaseMessage[]): Promise<BaseMessage[]> {
+    return selectContextWindow(this.llm, messages, env.MAX_CONTEXT_SIZE);
+  }
 
   toNodeFn() {
     return async (state: TState, config?: RunnableConfig) => {
