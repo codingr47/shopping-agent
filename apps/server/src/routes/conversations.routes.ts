@@ -28,7 +28,8 @@ function convertMessages(messages: BaseMessage[]): ChatMessage[] {
         if (typeof part === "string") {
           content.push({ type: "text", text: part });
         } else if (typeof part === "object" && part && "type" in part && part.type === "text" && "text" in part) {
-          content.push({ type: "text", text: (part as any).text || "" });
+          const textVal = (part as { text: unknown }).text;
+          content.push({ type: "text", text: typeof textVal === "string" ? textVal : "" });
         }
       }
     }

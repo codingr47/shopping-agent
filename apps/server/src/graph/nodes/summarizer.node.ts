@@ -63,7 +63,7 @@ Context: ${contextText}`;
         : "I found some results for you!";
 
     const toolArtifacts = messages.filter(
-      m => (m.type === "ai" && (m as any).tool_calls?.length) > 0 || m.type === 'tool'
+      m => (m.type === "ai" && ((m as AIMessage).tool_calls?.length ?? 0) > 0) || m.type === 'tool'
     );
     const removals = toolArtifacts.map(m => new RemoveMessage({ id: m.id! }));
 

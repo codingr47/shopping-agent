@@ -1,4 +1,5 @@
 import { RunResult } from "../lib/types.js";
+import { ReliabilitySummary, PerPromptMetrics } from "../evaluators/reliability.js";
 import { svgHorizontalBarChart, svgGroupedBarChart } from "./svg.js";
 
 function escapeHtml(text: string): string {
@@ -58,7 +59,7 @@ function statusColor(passRate: number, threshold: number = 0.8): string {
 
 export function generateHtmlReport(
   results: RunResult[],
-  reliability: { perPrompt: any[]; meanModalConsistency: number; minModalConsistency: number; unstablePrompts: string[]; p95Latency: number },
+  reliability: ReliabilitySummary,
 ): string {
   const timestamp = new Date().toISOString();
   const perPrompt = computePerPromptMetrics(results);
@@ -280,7 +281,7 @@ export function generateHtmlReport(
   html += "        <tbody>\n";
 
   for (const [name, data] of perPrompt.entries()) {
-    const consistency = reliability.perPrompt.find((p: any) => p.prompt === data.prompt)?.modalJourneyConsistency ?? 0;
+    const consistency = reliability.perPrompt.find((p: PerPromptMetrics) => p.prompt === data.prompt)?.modalJourneyConsistency ?? 0;
     const passRate = data.passCount / data.runs.length;
     const latencies = [...data.latencies].sort((a, b) => a - b);
     const meanLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
@@ -306,7 +307,7 @@ export function generateHtmlReport(
   html += "      <h2>🎯 Modal Consistency by Prompt</h2>\n";
   html += '      <div class="chart-container">\n';
   const consistencyRows = Array.from(perPrompt.entries()).map(([name, data]) => {
-    const consistency = reliability.perPrompt.find((p: any) => p.prompt === data.prompt)?.modalJourneyConsistency ?? 0;
+    const consistency = reliability.perPrompt.find((p: PerPromptMetrics) => p.prompt === data.prompt)?.modalJourneyConsistency ?? 0;
     return {
       label: name,
       value: consistency * 100,

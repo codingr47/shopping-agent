@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   searchProductsInput,
   listProductsInput,
@@ -7,7 +8,7 @@ import {
 } from "@shopping-agent/shared";
 import { EvaluationOutput, EvalExample } from "../lib/types.js";
 
-const toolSchemas: Record<string, any> = {
+const toolSchemas: Record<string, z.ZodTypeAny> = {
   search_products: searchProductsInput,
   list_products: listProductsInput,
   get_product_by_id: getProductByIdInput,
@@ -102,7 +103,7 @@ export const invalidToolArgumentEvaluator = {
     let invalid = 0;
     const issues: string[] = [];
 
-    for (const toolCall of outputs.toolCalls as any[]) {
+    for (const toolCall of outputs.toolCalls) {
       const schema = toolSchemas[toolCall.name];
       if (!schema) {
         issues.push(`Unknown tool: ${toolCall.name}`);
@@ -112,7 +113,7 @@ export const invalidToolArgumentEvaluator = {
 
       const result = schema.safeParse(toolCall.args);
       if (!result.success) {
-        issues.push(`${toolCall.name}: ${result.error.issues.map((i: any) => i.message).join("; ")}`);
+        issues.push(`${toolCall.name}: ${result.error.issues.map((i: z.ZodIssue) => i.message).join("; ")}`);
         invalid++;
       }
     }

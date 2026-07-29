@@ -30,7 +30,7 @@ export function initializeDatabase(): {
   _db.pragma("synchronous = NORMAL");
 
   _checkpointer = new SqliteSaver(_db);
-  (_checkpointer as any).setup?.();
+  (_checkpointer as SqliteSaver & { setup: () => void }).setup?.();
 
   createConversationsTable(_db);
 

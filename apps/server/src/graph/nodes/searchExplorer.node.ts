@@ -7,6 +7,9 @@ import { callTool, parseToolResult, getMcpClient } from "../../mcp/client.js";
 import type { Logger } from "../../logger.js";
 import type { ProductSummary, ProductDetail } from "@shopping-agent/shared";
 
+type CategoriesPayload = { categories: string[] };
+type ProductsPayload = { products: ProductSummary[]; total: number };
+
 function toIndexedProduct(product: ProductSummary | ProductDetail): IndexedProduct {
   if ("shortDescription" in product) {
     return product as IndexedProduct;
@@ -28,13 +31,15 @@ function deriveStateFromPayload(
   state: ShoppingStateType,
   log: Logger,
 ): Partial<ShoppingStateType> {
-  if (payload && typeof payload === "object" && Array.isArray((payload as any).categories)) {
-    return { categories: (payload as any).categories };
+  const p = payload as Partial<CategoriesPayload & ProductsPayload & ProductDetail>;
+
+  if (payload && typeof payload === "object" && Array.isArray(p.categories)) {
+    return { categories: p.categories };
   }
 
-  if (payload && typeof payload === "object" && Array.isArray((payload as any).products)) {
-    const products = (payload as any).products as ProductSummary[];
-    const indexedProducts = Object.fromEntries(products.map(p => [p.id, toIndexedProduct(p)]));
+  if (payload && typeof payload === "object" && Array.isArray(p.products)) {
+    const products = p.products as ProductSummary[];
+    const indexedProducts = Object.fromEntries(products.map(prod => [prod.id, toIndexedProduct(prod)]));
     return {
       productResults: products,
       productIndex: indexedProducts,
@@ -42,7 +47,7 @@ function deriveStateFromPayload(
     };
   }
 
-  if (payload && typeof payload === "object" && typeof (payload as any).id === "number" && typeof (payload as any).title === "string") {
+  if (payload && typeof payload === "object" && typeof p.id === "number" && typeof p.title === "string") {
     const productDetail = payload as ProductDetail;
     const indexedProduct = toIndexedProduct(productDetail);
     return {

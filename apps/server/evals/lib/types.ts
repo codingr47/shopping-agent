@@ -2,7 +2,7 @@ export interface EvaluationOutput {
   finalResponse: string;
   journey: string[];
   selectedIntent: string | undefined;
-  toolCalls: Array<{ name: string; args: unknown }>;
+  toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
   latencyMs: number;
 }
 
@@ -30,7 +30,7 @@ export interface RunResult {
   repetition: number;
   journey: string[];
   selectedIntent: string | undefined;
-  toolCalls: Array<{ name: string; args: unknown }>;
+  toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
   latencyMs: number;
   evaluatorResults: EvaluatorResult[];
   passed: boolean;

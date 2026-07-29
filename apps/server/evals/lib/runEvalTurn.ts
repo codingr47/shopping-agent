@@ -1,9 +1,10 @@
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { MemorySaver } from "@langchain/langgraph";
 import { randomUUID } from "crypto";
 import { createGraph } from "../../src/graph/graph.js";
 import { initializeMcpClient } from "../../src/mcp/client.js";
 import { EvaluationOutput } from "./types.js";
+import { type ShoppingStateType } from "../../src/graph/state.js";
 
 let mcpInitialized = false;
 
@@ -16,7 +17,8 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
   const turnId = randomUUID();
   const threadId = randomUUID();
 
-  const config: any = {
+  type GraphStreamOptions = Parameters<typeof graph.stream>[1];
+  const config: GraphStreamOptions = {
     configurable: { thread_id: threadId, requestId: turnId },
     streamMode: ["updates"],
   };
@@ -26,7 +28,7 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
   let finalResponse = "";
   let selectedIntent: string | undefined;
   let firstDispatch = true;
-  const toolCalls: Array<{ name: string; args: unknown }> = [];
+  const toolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
   try {
     const stream = await graph.stream(
@@ -34,7 +36,7 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
       config,
     );
 
-    for await (const event of stream as any) {
+    for await (const event of stream as AsyncIterable<[string, unknown]>) {
       if (!Array.isArray(event) || event.length < 2) continue;
 
       // Event format: ["updates", {nodeName: {nodeUpdates}}]
@@ -42,7 +44,7 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
       if (mode !== "updates" || !delta || typeof delta !== "object") continue;
 
       // delta is {nodeName: {...updates...}, ...otherNodes...}
-      const entries = Object.entries(delta) as [string, any][];
+      const entries = Object.entries(delta) as [string, Partial<ShoppingStateType>][];
       for (const [nodeName, nodeUpdate] of entries) {
         // Guardrail verdict
         if (nodeName === "guardrail" && nodeUpdate.guardrailVerdict) {
@@ -64,7 +66,7 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
         if (nodeName === "searchExplorer") {
           if (nodeUpdate.messages && Array.isArray(nodeUpdate.messages)) {
             for (const msg of nodeUpdate.messages) {
-              if (msg && msg.tool_calls && Array.isArray(msg.tool_calls)) {
+              if (msg instanceof AIMessage && msg.tool_calls && Array.isArray(msg.tool_calls)) {
                 for (const toolCall of msg.tool_calls) {
                   if (toolCall.name) {
                     journey.push(`call_tool:${toolCall.name}`);

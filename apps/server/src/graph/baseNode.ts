@@ -29,7 +29,7 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
       );
     }
 
-    const modelKwargs: any = {};
+    const modelKwargs: { seed?: number } = {};
     if (config.seed !== undefined) {
       modelKwargs.seed = config.seed;
     }
@@ -84,7 +84,7 @@ export abstract class BaseGraphNode<TState = ShoppingStateType> {
     };
   }
 
-  private info(msg: any) {
+  private info(msg: string | Record<string, unknown>) {
     this.logger.info(msg);
   }
 

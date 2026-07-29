@@ -9,6 +9,11 @@ import {
 } from "@shopping-agent/shared";
 import { getMcpClient } from "./client.js";
 
+interface MCPToolResult {
+  content?: Array<{ type: string; text?: string }>;
+  isError?: boolean;
+}
+
 export async function searchProducts(
   input: SearchProductsInput,
 ): Promise<{ products: ProductSummary[]; total: number }> {
@@ -16,9 +21,9 @@ export async function searchProducts(
   const result = await client.callTool({
     name: "search_products",
     arguments: input,
-  });
-  const content = (result.content as any[])?.[0];
-  if (content && content.type === "text") {
+  }) as MCPToolResult;
+  const content = result.content?.[0];
+  if (content && content.type === "text" && content.text) {
     return JSON.parse(content.text);
   }
   return { products: [], total: 0 };
@@ -31,9 +36,9 @@ export async function listProducts(
   const result = await client.callTool({
     name: "list_products",
     arguments: input,
-  });
-  const content = (result.content as any[])?.[0];
-  if (content && content.type === "text") {
+  }) as MCPToolResult;
+  const content = result.content?.[0];
+  if (content && content.type === "text" && content.text) {
     return JSON.parse(content.text);
   }
   return { products: [], total: 0 };
@@ -46,9 +51,9 @@ export async function getProductById(
   const result = await client.callTool({
     name: "get_product_by_id",
     arguments: input,
-  });
-  const content = (result.content as any[])?.[0];
-  if (content && content.type === "text") {
+  }) as MCPToolResult;
+  const content = result.content?.[0];
+  if (content && content.type === "text" && content.text) {
     return JSON.parse(content.text);
   }
   throw new Error("Failed to fetch product details");
@@ -61,9 +66,9 @@ export async function listCategories(
   const result = await client.callTool({
     name: "list_categories",
     arguments: input,
-  });
-  const content = (result.content as any[])?.[0];
-  if (content && content.type === "text") {
+  }) as MCPToolResult;
+  const content = result.content?.[0];
+  if (content && content.type === "text" && content.text) {
     return JSON.parse(content.text);
   }
   return { categories: [] };
@@ -76,9 +81,9 @@ export async function getProductsByCategory(
   const result = await client.callTool({
     name: "get_products_by_category",
     arguments: input,
-  });
-  const content = (result.content as any[])?.[0];
-  if (content && content.type === "text") {
+  }) as MCPToolResult;
+  const content = result.content?.[0];
+  if (content && content.type === "text" && content.text) {
     return JSON.parse(content.text);
   }
   return { products: [], total: 0 };

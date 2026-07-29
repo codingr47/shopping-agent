@@ -3,6 +3,11 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { env } from "../env.js";
 import { logger, type Logger } from "../logger.js";
 
+interface MCPToolResult {
+  content?: Array<{ type: string; text?: string }>;
+  isError?: boolean;
+}
+
 let _client: Client | null = null;
 
 export async function initializeMcpClient(): Promise<Client> {
@@ -36,13 +41,13 @@ export function getMcpClient(): Client {
   return _client;
 }
 
-export async function callTool(log: Logger, name: string, args: Record<string, unknown>): Promise<any> {
+export async function callTool(log: Logger, name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
   const start = performance.now();
   log.debug({ event: "mcp.call.start", tool: name, args }, `MCP call: ${name}`);
 
   try {
     const client = getMcpClient();
-    const result = await client.callTool({ name, arguments: args });
+    const result = await client.callTool({ name, arguments: args }) as MCPToolResult;
     const duration = Math.round(performance.now() - start);
     log.debug(
       { event: "mcp.call.end", tool: name, durationMs: duration },
@@ -59,10 +64,11 @@ export async function callTool(log: Logger, name: string, args: Record<string, u
   }
 }
 
-export function parseToolResult<T = any>(result: any): T {
+export function parseToolResult<T = unknown>(result: MCPToolResult): T {
   const content = result?.content?.[0];
-  if (result?.isError || !content || content.type !== "text") {
-    throw new Error(typeof content?.text === "string" ? content.text : "MCP tool call returned no usable content");
+  if (result?.isError || !content || content.type !== "text" || !content.text) {
+    const errMsg = typeof content?.text === "string" ? content.text : "MCP tool call returned no usable content";
+    throw new Error(errMsg);
   }
   return JSON.parse(content.text);
 }

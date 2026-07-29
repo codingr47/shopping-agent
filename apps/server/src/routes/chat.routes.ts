@@ -4,6 +4,8 @@ import { createGraph } from "../graph/graph.js";
 import { updateConversationUpdatedAt, updateConversationTitle, getConversation } from "../db/sqlite.js";
 import { randomUUID } from "crypto";
 import { logger } from "../logger.js";
+import { type ShoppingStateType } from "../graph/state.js";
+import { TurnWidget } from "../graph/state.js";
 
 const router = Router();
 
@@ -11,7 +13,7 @@ interface ChatRequest {
   content: string;
 }
 
-function encodeSSEEvent(event: string, data: any): string {
+function encodeSSEEvent<T>(event: string, data: T): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
@@ -45,12 +47,13 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
     const graph = createGraph();
     const turnId = randomUUID();
 
-    const config: any = {
+    type GraphStreamOptions = Parameters<typeof graph.stream>[1];
+    const config: GraphStreamOptions = {
       configurable: { thread_id: id, requestId },
       streamMode: ["updates", "messages"],
     };
 
-    const collectedWidgets: any[] = [];
+    const collectedWidgets: TurnWidget[] = [];
     let offTopicMessageEmitted = false;
 
     log.debug({ event: "request.start", method: "POST", path: `/api/conversations/${id}/messages` }, "chat message received");
@@ -66,7 +69,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
 
       log.debug({ event: "stream.start" }, "starting SSE stream");
 
-      for await (const event of stream as any) {
+      for await (const event of stream as AsyncIterable<[string, unknown]>) {
         if (!Array.isArray(event) || event.length !== 2) continue;
 
         const [mode, payload] = event;
@@ -78,7 +81,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
           const entries = Object.entries(payload);
           if (entries.length === 0) continue;
 
-          const [nodeName, delta] = entries[0] as [string, any];
+          const [nodeName, delta] = entries[0] as [string, Partial<ShoppingStateType>];
 
           if (delta && typeof delta === "object") {
             if (nodeName === "offTopic" && delta.finalMessage && !offTopicMessageEmitted) {
@@ -96,7 +99,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
                   label: nodeStatusLabels[nodeName],
                 }),
               );
-            } else if (nodeName === "supervisor" && delta.route && delta.route !== "summarize" && delta.currentIntent) {
+            } else if (nodeName === "supervisor" && delta.route && delta.route !== "summarize" && delta.currentIntent && delta.currentIntent.type) {
               const intentLabel = intentStatusLabels[delta.currentIntent.type];
               if (intentLabel) {
                 res.write(
