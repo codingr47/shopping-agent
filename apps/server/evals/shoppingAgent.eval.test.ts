@@ -3,7 +3,7 @@ import { runEvalTurn } from "./lib/runEvalTurn.js";
 import { EvaluationOutput, EvalExample, RunResult, EvaluatorResult } from "./lib/types.js";
 import fs from "fs";
 import path from "path";
-import { shoppingJourneys } from "./datasets/shoppingJourneys.js";
+import { allDatasetExamples } from "./lib/loadDatasets.js";
 import { journeyPassEvaluator, intentAccuracyEvaluator, completionEvaluator, forbiddenStepEvaluator } from "./evaluators/journey.js";
 import {
   toolSelectionAccuracyEvaluator,
@@ -45,7 +45,7 @@ describe("shopping agent journeys", () => {
       const numRepetitions = EVAL_REPETITIONS;
 
       // Run each example numRepetitions times
-      for (const example of shoppingJourneys) {
+      for (const example of allDatasetExamples) {
         for (let rep = 0; rep < numRepetitions; rep++) {
           const outputs = await runEvalTurn(example.inputs.prompt);
           collected.push({ inputs: example.inputs, outputs });
