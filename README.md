@@ -125,3 +125,4 @@ What would slip through are things that are not handled - 25 prompts for a produ
 - Traceability could be better, for production I would use LangSmith so I can trace and address problems in real time.
 - The system doesn't handle ambiguity enough. 
 - The evaluation suite doesn't handle multi prompts, which I would add if I had more time to do so.
+- The evaluation suite indicates the system, for some prompts add unnecessary tool arguments. not a blocker because these are defaults mostly and not something that is breaking the user from using it. but I would spend more time making the instructions better on that specific subject.
