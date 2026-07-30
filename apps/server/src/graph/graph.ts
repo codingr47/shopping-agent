@@ -10,11 +10,13 @@ import { SummarizerNode } from "./nodes/summarizer.node.js";
 import { getCheckpointer } from "../db/sqlite.js";
 import { env } from "../env.js";
 
+const GUARDRAIL_SEED = 7;
+
 export function createGraph(checkpointer: BaseCheckpointSaver = getCheckpointer()) {
   const guardrailNode = new GuardrailIntentClassifierNode({
     model: env.NANO_MODEL,
     temperature: 0,
-    seed: 7,
+    seed: GUARDRAIL_SEED,
   });
 
   const supervisorNode = new SupervisorNode({
