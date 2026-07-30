@@ -3,7 +3,7 @@ import { BaseMessage } from "@langchain/core/messages";
 import { ProductSummary, ProductDetail } from "@shopping-agent/shared";
 
 export type GuardrailVerdict = "in_scope" | "out_of_scope" | undefined;
-export type Intent = "search" | "browse_category" | "browse_products" | "product_detail" | "comparison" | "other" | undefined;
+export type Intent = "search" | "browse_categories" | "browse_products_by_category" | "browse_products" | "product_detail" | "comparison" | "other" | undefined;
 export type Route = "searchExplorer" | "comparison" | "summarize" | undefined;
 
 export interface Slots {
@@ -13,6 +13,8 @@ export interface Slots {
   productIds?: number[];
   sortBy?: "title" | "price" | "rating";
   order?: "asc" | "desc";
+  limit?: number;
+  skip?: number;
 }
 
 export interface IntentItem {
@@ -24,7 +26,8 @@ export interface IntentItem {
 
 export const INTENT_NODE_MAP: Record<NonNullable<Intent>, IntentItem["node"]> = {
   search: "searchExplorer",
-  browse_category: "searchExplorer",
+  browse_categories: "searchExplorer",
+  browse_products_by_category: "searchExplorer",
   browse_products: "searchExplorer",
   product_detail: "searchExplorer",
   comparison: "comparison",

@@ -10,10 +10,12 @@ const slotsSchema = z.object({
   productIds: z.array(z.number().int()).nullable(),
   sortBy: z.enum(["title", "price", "rating"]).nullable(),
   order: z.enum(["asc", "desc"]).nullable(),
+  limit: z.number().int().nullable(),
+  skip: z.number().int().nullable(),
 });
 
 const intentItemSchema = z.object({
-  type: z.enum(["search", "browse_category", "browse_products", "product_detail", "comparison", "other"]),
+  type: z.enum(["search", "browse_categories", "browse_products_by_category", "browse_products", "product_detail", "comparison", "other"]),
   confidence: z.number().min(0).max(1),
   slots: slotsSchema,
 });
@@ -65,7 +67,8 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
 1. Is it in-scope (related to shopping/product discovery)?
 2. What intents does the query contain? A query may have multiple distinct intents (e.g., "show me headphones and tell me about product 5" contains both a search and a product detail lookup).
    - search: user wants to find/search for products by keyword
-   - browse_category: user wants to explore a product category
+   - browse_categories: user wants to explore categories
+   - browse_products_by_category: user wants to explore products by a category
    - product_detail: user wants details about a specific product
    - browse_products: user wants to list all products by sort options and/or limit
    - comparison: user wants to compare specific products already discussed, or all products in a known category (e.g., "find the best deal"), without fetching new data
@@ -78,6 +81,8 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
    - productIds: array of product IDs, if this intent is a comparison (resolve names from conversation history to IDs)
    - sortBy: how to sort results (title, price, rating), if mentioned for this intent
    - order: sort order (asc, desc), if mentioned for this intent
+   - limit: amount of products / categories to get
+   - skip: an offset to start looking products / categories from
    Slots for one intent must NOT leak into another intent's slots.
 
    Slot values may be derived from:
@@ -92,68 +97,85 @@ Set slot fields to null if they don't apply to that intent.
 ${knownStateContext}
 
 # Examples:
-## Example 1 - search category and its products
-Fetch category A and get all its' products
-Thought: The user is asking to 'Fetch category A' and 'get all its' products. He is asking for two actions.
-intents: [
-  {
-    "type": "browse_category",
-    "node": "searchExplorer",
-    "confidence": <your confidence>,
-    "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
-  },
-  {
-    "type": "search",
-    "node": "searchExplorer",
-    "confidence": <your confidence>,
-    "slots": { "query": null, "category": "A", "productId": null, "productIds": null, "sortBy": null, "order": null }
-  }
-]
-## Example 2 - Multi Products Search
-Fetch details of:
-Squishy Pigeon Doll
-iPhone 15 Plus
-Thought: The user is asking to 'Fetch details' of 'Squishy Pigeon Doll', 'iPhone 15 Plus'. He is querying for 2 products.
-intents:
-intents: [
-  {
-    "type": "product_detail",
-    "node": "searchExplorer",
-    "confidence": <your confidence>,
-    "slots": { "query": null, "category": null, "productId": <id resolved from "Squishy Pigeon Doll">, "productIds": null, "sortBy": null, "order": null }
-  },
-  {
-    "type": "product_detail",
-    "node": "searchExplorer",
-    "confidence": <your confidence>,
-    "slots": { "query": null, "category": null, "productId": <id resolved from "iPhone 15 Plus">, "productIds": null, "sortBy": null, "order": null }
-  }
-]
-## Example 3 - List Products
-User: List products in descending order by title
-Thought: The user is asking to List products. He is not specifying for specific products. He wants to list all products.
+
+## Example 1 - List Products
+User: Show 35 products, beginning after 20, sort in descending order by title
+Thought: 
+The user is asking to Show Products. 
+He is asking for one action.
+He is specifying for 35 products exactly (limit = 35).
+He is asking to skip first 20 (skip = 20).
+He is asking to sort by title in descending order (sortBy = title, order = desc)
 intents: [
   {
     "type": "browse_products",
     "node": "searchExplorer",
     "confidence": <your confidence>
-    "slots": { "query": null, "category": null, "productId": null, "productIds": null, "sortBy": "title", "order": "desc" }
+    "slots": { "query": null, "category": null, "productId": null, "productIds": null, "sortBy": "title", "order": "desc", "limit": 35, "skip": 20 }
+  }
+]
+## Example 2 - List Categories
+List all categories
+Thought:
+The user is asking to Show all Categories.
+He is asking for one action.
+intents: [
+  {
+    "type": "browse_categories",
+    "node": "searchExplorer",
+    "confidence": <your confidence>
+    "slots": { "query": null, "category": null, "productId": null, "productIds": null, "sortBy": null, "order": null, "limit": null, "skip": null }
+  }
+]
+## Example 3 - Get Products by Category 
+User: Get 14 products starting from 20 for category clocks 
+Thought:
+The user is asking to Show Products By Category
+He is asking for one action
+He is asking to limit to 14 products
+He is asking to skip the first 20 products
+He is asking for category clocks
+intents: [
+  {
+    "type": "browse_products_by_category",
+    "node": "searchExplorer",
+    "confidence": <your confidence>
+    "slots": { "query": null, "category": "clocks", "productId": null, "productIds": null, "sortBy": null, "order": null, "limit": 14, "skip": 20 }
   }
 ]
 
-## Example 4 - Compare products
+## Example 4 - Search product by query
+User: Search for exactly 2 products with the word alex and skip the first result
+Thought:
+The user is asking to Search for products
+He is asking for one action
+He is asking to limit to 2 products
+He is asking to skip the first product
+He is asking for products containing the word alex
+intents: [
+  {
+    "type": "search",
+    "node": "searchExplorer",
+    "confidence": <your confidence>
+    "slots": { "query": "alex", "category": null, "productId": null, "productIds": null, "sortBy": null, "order": null, "limit": 2, "skip": 1 }
+  }
+]
+
+## Example 6 - Compare products
 Compare product A and product B for me, which one is better?
-Thought: The user is asking to compare two specific products already discussed. Resolve the product names from the conversation history to their IDs.
+Thought: 
+The user is asking to compare two specific products already discussed
+He is asking for one action.
+We need to resolve the product names from the conversation history to their IDs.
 intents: [
   {
     "type": "comparison",
     "node": "comparison",
     "confidence": <your confidence>,
-    "slots": { "query": null, "category": null, "productId": null, "productIds": [<id of product A>, <id of product B>], "sortBy": null, "order": null }
+    "slots": { "query": null, "category": null, "productId": null, "productIds": [<id of product A>, <id of product B>], "sortBy": null, "order": null, "limit": null, "skip": null }
   }
 ]
 `;
-
     const windowedMessages = await this.selectContextWindow(state.messages);
 
     const response = await this.llm
@@ -173,6 +195,8 @@ intents: [
         productId: item.slots.productId || undefined,
         productIds: item.slots.productIds?.length ? item.slots.productIds : undefined,
         sortBy: item.slots.sortBy || undefined,
+        limit: item.slots.limit || undefined,
+        skip: item.slots.skip || undefined,
         order: item.slots.order || undefined,
       },
     }));

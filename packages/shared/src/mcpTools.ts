@@ -8,8 +8,8 @@ export const searchProductsInput = z.object({
 export type SearchProductsInput = z.infer<typeof searchProductsInput>;
 
 export const listProductsInput = z.object({
-  limit: z.number().int().min(1).max(20).optional(),
-  skip: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(20).optional().describe("amount of products"),
+  skip: z.number().int().min(0).optional().describe("start / shift position from where to start counting"),
   sortBy: z.enum(["title", "price", "rating"]).optional(),
   order: z.enum(["asc", "desc"]).optional(),
 });

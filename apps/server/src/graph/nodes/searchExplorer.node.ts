@@ -110,9 +110,16 @@ export class SearchExplorerNode extends BaseGraphNode {
       const systemPrompt = `# Instructions
 You are a shopping assistant with access to product search and discovery tools.
 Your job is to pick the right tool to help the user based on their intent and query.
-The user's detected intent right now is: ${currentIntent.type} (confidence: ${currentIntent.confidence}) — use this as a hint, but feel free to use other tools if they better fit the request.${slotContext}
+The user's detected intent right now is: ${currentIntent.type} (confidence: ${currentIntent.confidence})
+Slot Context: ${slotContext}
 
 Use the conversation history below — including any earlier tool calls and results from this turn — to avoid redundant calls and inform your choice.
+
+# Tool Invocation Policy
+- Use the detected intent as a direct hint, and its confidence
+- Use the Slot Context to decide how to invoke the tool, and which arguments
+- Prioritize the intent + Slot context, but if not appropriate use your instinct and call which ever tool is most suitable 
+
 # Tool argument policy
 Use the smallest valid set of arguments required to satisfy the request.
 
@@ -129,6 +136,8 @@ Include an argument only when:
 - CRITICAL: Even common defaults like pagination (limit, skip, sortBy, order) must be omitted unless the user explicitly asks for them.
 
 IMPORTANT: Before calling a tool, verify that every argument is directly supported by the request or required by the tool schema.
+
+
 `;
 
       const windowedMessages = await this.selectContextWindow(messages);
