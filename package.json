@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "concurrently -k -n web,server \"npm run dev -w apps/web\" \"npm run dev -w apps/server\"",
     "build": "npm run build -w packages/shared && npm run build -w apps/mcp-server && npm run build -w apps/server && npm run build -w apps/web",
-    "typecheck": "npm run typecheck -w packages/shared && npm run typecheck -w apps/mcp-server && npm run typecheck -w apps/server && npm run typecheck -w apps/web"
+    "typecheck": "npm run typecheck -w packages/shared && npm run typecheck -w apps/mcp-server && npm run typecheck -w apps/server && npm run typecheck -w apps/web",
+    "test": "cd apps/server && npm run test"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",

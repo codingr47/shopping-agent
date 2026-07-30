@@ -16,7 +16,7 @@ import { trajectoryMatchEvaluator } from "./evaluators/trajectory.js";
 import { computeReliability } from "./evaluators/reliability.js";
 import { generateHtmlReport } from "./report/generateReport.js";
 
-const EVAL_REPETITIONS = 1;
+const EVAL_REPETITIONS = 5;
 
 interface CollectedRow {
   inputs: { prompt: string };
@@ -107,7 +107,7 @@ describe("shopping agent journeys", () => {
         );
       }
     },
-    300_000,
+    30000_000,
   );
 
   afterAll(() => {
@@ -115,7 +115,8 @@ describe("shopping agent journeys", () => {
     const html = generateHtmlReport(runResults, reliabilitySnapshot);
     const outDir = path.resolve(__dirname, "report-output");
     fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(path.join(outDir, `report_${Date.now()}.html`), html, "utf-8");
-    console.log(`\n📊 Eval report written to ${path.join(outDir, "report.html")}`);
+    const fileName = `report_${Date.now()}.html`
+    fs.writeFileSync(path.join(outDir, fileName), html, "utf-8");
+    console.log(`\n📊 Eval report written to ${path.join(outDir, fileName)}`);
   });
 });
