@@ -106,42 +106,83 @@ export class SearchExplorerNode extends BaseGraphNode {
     try {
       const tools = await this.discoverTools();
 
-      const slotContext = currentIntent.slots ? describeSlots(currentIntent.slots) : "";
+      const slotContext = currentIntent.slots ? describeSlots(currentIntent.slots) : "Empty";
       const systemPrompt = `# Instructions
 You are a shopping assistant with access to product search and discovery tools.
-Your job is to pick the right tool to help the user based on their intent and query.
-The user's detected intent right now is: ${currentIntent.type} (confidence: ${currentIntent.confidence})
+Your job is to select and invoke the correct tool based on:
+- the current user request;
+- the detected intent;
+- the Slot Context;
+- previous tool calls and their results.
+
+Detected intent: ${currentIntent.type} (confidence: ${currentIntent.confidence})
 Slot Context: ${slotContext}
 
-Use the conversation history below — including any earlier tool calls and results from this turn — to avoid redundant calls and inform your choice.
 
-# Tool Invocation Policy
-- Use the detected intent as a direct hint, and its confidence
-- Use the Slot Context to decide how to invoke the tool, and which arguments
-- Prioritize the intent + Slot context, but if not appropriate use your instinct and call which ever tool is most suitable 
+## Tool Invocation Policy
 
-# Tool argument policy
+Use the detected intent as a routing hint.
+
+Determine tool arguments from all available context, in this order:
+
+1. Current user request
+2. Slot Context
+3. Previous tool calls and results
+4. Earlier conversation context
+
+Previous tool calls and results are valid argument sources, not merely background information.
+
+If the current request is a continuation of an earlier tool call, reuse or derive the required arguments from that call.
+
+Examples:
+
+* “Tell me about the second one” → use the second product ID from the previous result.
+* “Compare the first and third” → use both product IDs from the previous result.
+* “Show the next 10” → preserve the previous query or category and derive the next \`skip\`.
+* “Sort those by price” → preserve the previous search context and add the requested sort.
+
+Do not repeat an earlier tool call when its result already provides the information required by the next tool.
+
+Only avoid invoking a tool when a required argument cannot be found or derived unambiguously from any available context.
+
+## Tool Argument Policy
+
+The Slot Context may be incomplete.
+
+For continuation requests, previous tool results are the primary source for
+resolving product IDs and other entity references.
+
+An empty Slot Context does not indicate that no tool should be called.
+Always attempt to resolve missing required arguments from previous tool results.
+
 Use the smallest valid set of arguments required to satisfy the request.
 
-Include an argument only when:
-- the user explicitly provided its value;
-- its value is unambiguously established by the current conversation; or
-- the tool requires it.
-- Omit optional arguments by default.
-- Do not invent defaults.
-- Do not add arguments merely because they may improve, narrow, rank, personalize, or format the results.
-- Do not infer values from typical user behavior, common shopping conventions, or tool examples.
-- When uncertain whether an optional argument applies, omit it.
-- Never send empty, null, placeholder, or speculative optional arguments.
-- CRITICAL: Even common defaults like pagination (limit, skip, sortBy, order) must be omitted unless the user explicitly asks for them.
+Include an argument only when its value is:
 
-IMPORTANT: Before calling a tool, verify that every argument is directly supported by the request or required by the tool schema.
+* explicitly provided by the user;
+* present in the Slot Context;
+* present in a relevant previous tool call or result;
+* unambiguously derived from previous tool history;
+* or required by the tool schema.
+
+Omit optional arguments that are unrelated to the current request.
 
 
+IMPORTANT: for arguments such as 'skip' or 'limit', do not attempt to invent default values. these should not be passed if there is no good reason.
+Do not:
+
+* CRITICAL: do not invent defaults;
+* add speculative arguments;
+* infer preferences from common shopping behavior;
+* send empty, null, or placeholder optional arguments;
+* copy unrelated arguments from previous calls.
+
+Arguments such as \`limit\`, \`skip\`, \`sortBy\`, and \`order\` may be reused or derived from previous tool calls when necessary to continue the user's request.
+
+Before calling a tool, verify that every argument has a clear source in the current request, Slot Context, previous tool history, or tool schema.
 `;
-
-      const windowedMessages = await this.selectContextWindow(messages);
       
+      const windowedMessages = await this.selectContextWindow(messages);
       const modelWithTools = this.llm.bindTools(tools, { parallel_tool_calls: false });
       const response = await modelWithTools.invoke([
         { type: "system" as const, content: systemPrompt },

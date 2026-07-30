@@ -22,7 +22,7 @@ const intentItemSchema = z.object({
 
 const verdictSchema = z.object({
   verdict: z.enum(["in_scope", "out_of_scope"]),
-  intents: z.array(intentItemSchema).min(1).max(3),
+  intents: z.array(intentItemSchema).min(1).max(50),
   reasoning: z.string(),
 });
 
@@ -75,10 +75,10 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
    - other: out-of-scope query (weather, politics, etc.)
 3. For each intent, provide a confidence score (0-3 intents max per query).
 4. For EACH intent, extract the slots that apply to THAT SPECIFIC intent only (not the whole query):
-   - query: the search term, if this intent is a search
+   - query: the search term, if this intent is a search; the raw comparison request, if this intent is a comparison
    - category: the category name, if this intent is a category browse
    - productId: the product ID, if this intent is a product detail lookup
-   - productIds: array of product IDs, if this intent is a comparison (resolve names from conversation history to IDs)
+   - productIds: array of explicitly mentioned numeric product IDs only; do not resolve product names, ordinals, or vague references here
    - sortBy: how to sort results (title, price, rating), if mentioned for this intent
    - order: sort order (asc, desc), if mentioned for this intent
    - limit: amount of products / categories to get
@@ -92,6 +92,8 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
 
 Be concise in your reasoning. Consider queries about products, categories, prices, features, availability as in-scope.
 Set slot fields to null if they don't apply to that intent.
+
+CRITICAL: DO NOT miss any intents. if the user is asking for N actions, you must have N intents !
 
 # Currently known state:
 ${knownStateContext}
@@ -161,18 +163,38 @@ intents: [
   }
 ]
 
-## Example 6 - Compare products
-Compare product A and product B for me, which one is better?
+## Example 5 - Get N products
+User: Get product 20 and product 30
+Thought:
+The user is asking to get product 20
+The user is also asking to get product 30
+He is asking for N actions
+intents: [
+  {
+    "type": "product_detail",
+    "node": "searchExplorer",
+    "confidence": <your confidence>
+    "slots": { "query": "alex", "category": null, "productId": 20, "productIds": null, "sortBy": null, "order": null, "limit": null, "skip": null }
+  },
+  {
+    "type": "product_detail",
+    "node": "searchExplorer",
+    "confidence": <your confidence>
+    "slots": { "query": "alex", "category": null, "productId": 30, "productIds": null, "sortBy": null, "order": null, "limit": null, "skip": null }
+  }
+]
+## Example 7 - Compare products
+Compare product A and product B for me, which one is cheaper?
 Thought: 
 The user is asking to compare two specific products already discussed
 He is asking for one action.
-We need to resolve the product names from the conversation history to their IDs.
+The comparison node will resolve product names from the raw query and known state.
 intents: [
   {
     "type": "comparison",
     "node": "comparison",
     "confidence": <your confidence>,
-    "slots": { "query": null, "category": null, "productId": null, "productIds": [<id of product A>, <id of product B>], "sortBy": null, "order": null, "limit": null, "skip": null }
+    "slots": { "query": "Compare product A and product B for me, which one is cheaper?", "category": null, "productId": null, "productIds": null, "sortBy": null, "order": null, "limit": null, "skip": null }
   }
 ]
 `;
@@ -214,3 +236,5 @@ intents: [
     };
   }
 }
+
+

@@ -5,6 +5,14 @@ import type { Logger } from "../../logger.js";
 
 type ProductResolver = (slots: Slots, productIndex: Record<number, IndexedProduct>) => IndexedProduct[] | undefined;
 
+const targetResolutionSchema = z.object({
+  productIds: z.array(z.number().int()),
+  category: z.string().nullable(),
+  sortBy: z.enum(["title", "price", "rating"]).nullable(),
+  order: z.enum(["asc", "desc"]).nullable(),
+  reasoning: z.string(),
+});
+
 const comparisonOutputSchema = z.object({
   answer: z.string(),
   referencedProductIds: z.array(z.number().int()),
@@ -30,6 +38,126 @@ export class ComparisonNode extends BaseGraphNode {
       if (result !== undefined) return result;
     }
     return [];
+  }
+
+  private getComparisonQuery(slots: Slots, messages: ShoppingStateType["messages"]): string {
+    if (slots.query) return slots.query;
+
+    const lastHumanMessage = [...messages].reverse().find(message => message.getType() === "human");
+    if (typeof lastHumanMessage?.content === "string") return lastHumanMessage.content;
+
+    return "";
+  }
+
+  private formatProductForResolution(product: IndexedProduct, ordinal?: number): string {
+    const position = ordinal !== undefined ? `Position: ${ordinal}\n` : "";
+    return `${position}ID: ${product.id}
+Title: ${product.title}
+Category: ${product.category}
+Price: $${product.price}
+Rating: ${product.rating}/5
+Description: ${product.shortDescription}`;
+  }
+
+  private resolveCategory(category: string | null | undefined, productIndex: Record<number, IndexedProduct>): string | undefined {
+    if (!category) return undefined;
+    const normalized = category.toLowerCase();
+    return Object.values(productIndex).find(p => p.category.toLowerCase() === normalized)?.category;
+  }
+
+  private async inferProductsFromQuery(
+    query: string,
+    state: ShoppingStateType,
+    slots: Slots,
+    log: Logger,
+  ): Promise<{ products: IndexedProduct[]; sortBy?: Slots["sortBy"]; order?: Slots["order"] }> {
+    const { productIndex, productResults } = state;
+
+    if (!query.trim()) {
+      return { products: this.resolveProducts(slots, productIndex), sortBy: slots.sortBy, order: slots.order };
+    }
+
+    const indexedProducts = Object.values(productIndex);
+    if (indexedProducts.length === 0) {
+      return { products: [], sortBy: slots.sortBy, order: slots.order };
+    }
+
+    const recentProducts = (productResults ?? [])
+      .map((p, i) => {
+        const indexed = productIndex[p.id];
+        return indexed ? this.formatProductForResolution(indexed, i + 1) : undefined;
+      })
+      .filter((p): p is string => p !== undefined)
+      .join("\n\n");
+
+    const allProducts = indexedProducts.map(p => this.formatProductForResolution(p)).join("\n\n");
+    const knownCategories = [...new Set(indexedProducts.map(p => p.category))].sort().join(", ");
+
+    const systemPrompt = `You resolve product comparison targets from already-known shopping state.
+
+User comparison query:
+${query}
+
+Known categories:
+${knownCategories || "None"}
+
+Recent visible products, in display order. Use these positions for references like "first", "second", "last", "these", or "those":
+${recentProducts || "None"}
+
+All indexed products:
+${allProducts}
+
+Return structured targets only from the indexed products above.
+
+Rules:
+- Prefer productIds when the query refers to specific products by title, ID, ordinal position, or phrases like "these/those/them" that clearly point to recent visible products.
+- Use category only when the query asks about a whole category and no specific product set is implied.
+- If the query asks for the best, cheapest, highest rated, best deal, or similar among visible products, return all relevant candidate productIds and set sortBy/order only when the user explicitly asks for ordering.
+- Preserve explicit sort requests: cheapest = sortBy price order asc; most expensive = price desc; highest rated/best rated = rating desc; alphabetical = title asc.
+- If no relevant known products can be identified, return an empty productIds array and null category.`;
+
+    const response = await this.llm
+      .withStructuredOutput(targetResolutionSchema)
+      .invoke([{ type: "system" as const, content: systemPrompt }]);
+
+    log.debug(
+      {
+        event: "comparison.target_resolution",
+        productIds: response.productIds,
+        category: response.category,
+        sortBy: response.sortBy,
+        order: response.order,
+        reasoning: response.reasoning,
+      },
+      "comparison targets resolved",
+    );
+
+    const productsById = response.productIds
+      .map(id => productIndex[id])
+      .filter((p): p is IndexedProduct => p !== undefined);
+
+    if (productsById.length > 0) {
+      return {
+        products: productsById,
+        sortBy: response.sortBy ?? slots.sortBy,
+        order: response.order ?? slots.order,
+      };
+    }
+
+    const category = this.resolveCategory(response.category, productIndex);
+    if (category) {
+      return {
+        products: indexedProducts.filter(p => p.category === category),
+        sortBy: response.sortBy ?? slots.sortBy,
+        order: response.order ?? slots.order,
+      };
+    }
+
+    return {
+      products: this.resolveProducts(slots, productIndex),
+      sortBy: response.sortBy ?? slots.sortBy,
+      order: response.order ?? slots.order,
+    };
   }
 
   private sortProducts(products: IndexedProduct[], sortBy?: Slots["sortBy"], order?: Slots["order"]): IndexedProduct[] {
@@ -84,7 +212,7 @@ export class ComparisonNode extends BaseGraphNode {
   }
 
   async run(state: ShoppingStateType, log: Logger): Promise<Partial<ShoppingStateType>> {
-    const { currentIntent, messages, productIndex, turnId } = state;
+    const { currentIntent, messages, turnId } = state;
 
     if (!currentIntent) {
       log.warn({ event: "comparison.no_intent" }, "comparison node called without current intent");
@@ -92,9 +220,23 @@ export class ComparisonNode extends BaseGraphNode {
     }
 
     const slots = currentIntent.slots || {};
+    const query = this.getComparisonQuery(slots, messages);
 
-    // Resolve target products using priority-ordered resolver chain
-    const resolvedProducts = this.resolveProducts(slots, productIndex);
+    let resolvedProducts: IndexedProduct[];
+    let sortBy: Slots["sortBy"];
+    let order: Slots["order"];
+
+    try {
+      const inferred = await this.inferProductsFromQuery(query, state, slots, log);
+      resolvedProducts = inferred.products;
+      sortBy = inferred.sortBy;
+      order = inferred.order;
+    } catch (error) {
+      log.warn({ err: error, event: "comparison.target_resolution_failed" }, "falling back to slot-based comparison target resolution");
+      resolvedProducts = this.resolveProducts(slots, state.productIndex);
+      sortBy = slots.sortBy;
+      order = slots.order;
+    }
 
     if (resolvedProducts.length === 0) {
       log.info({ event: "comparison.no_products" }, "no products found to compare");
@@ -102,7 +244,7 @@ export class ComparisonNode extends BaseGraphNode {
     }
 
     // Apply sorting if specified
-    const sortedProducts = this.sortProducts(resolvedProducts, slots.sortBy, slots.order);
+    const sortedProducts = this.sortProducts(resolvedProducts, sortBy, order);
 
     try {
       // Format products for LLM analysis
@@ -144,8 +286,8 @@ Examples:
           productCount: resolvedProducts.length,
           referencedCount: widgetProducts.length,
           finalCount: finalWidgetProducts.length,
-          sortBy: slots.sortBy,
-          order: slots.order,
+          sortBy,
+          order,
           usedFallback: widgetProducts.length === 0,
         },
         "comparison analysis complete",
@@ -161,3 +303,4 @@ Examples:
     }
   }
 }
+

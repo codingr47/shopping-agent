@@ -27,7 +27,6 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
   const journey: string[] = [];
   let finalResponse = "";
   let selectedIntent: string | undefined;
-  let firstDispatch = true;
   const toolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
   try {
@@ -55,10 +54,7 @@ export async function runEvalTurn(prompt: string): Promise<EvaluationOutput> {
         if (nodeName === "supervisor") {
           if (nodeUpdate.route && nodeUpdate.route !== "summarize" && nodeUpdate.currentIntent) {
             journey.push(`dispatch:${nodeUpdate.currentIntent.type}`);
-            if (firstDispatch) {
-              selectedIntent = nodeUpdate.currentIntent.type;
-              firstDispatch = false;
-            }
+            selectedIntent = nodeUpdate.currentIntent.type;
           }
         }
 
