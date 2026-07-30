@@ -15,6 +15,7 @@ export interface EvalExample {
     requiredTools?: string[];
     forbiddenTools?: string[];
     forbiddenSteps?: string[];
+    expectedToolArgs?: Array<{ tool: string; args: Record<string, unknown> }>;
   };
 }
 

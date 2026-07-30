@@ -13,7 +13,7 @@ const slotsSchema = z.object({
 });
 
 const intentItemSchema = z.object({
-  type: z.enum(["search", "browse_category", "product_detail", "comparison", "other"]),
+  type: z.enum(["search", "browse_category", "browse_products", "product_detail", "comparison", "other"]),
   confidence: z.number().min(0).max(1),
   slots: slotsSchema,
 });
@@ -67,6 +67,7 @@ export class GuardrailIntentClassifierNode extends BaseGraphNode {
    - search: user wants to find/search for products by keyword
    - browse_category: user wants to explore a product category
    - product_detail: user wants details about a specific product
+   - browse_products: user wants to list all products by sort options and/or limit
    - comparison: user wants to compare specific products already discussed, or all products in a known category (e.g., "find the best deal"), without fetching new data
    - other: out-of-scope query (weather, politics, etc.)
 3. For each intent, provide a confidence score (0-3 intents max per query).
@@ -128,7 +129,19 @@ intents: [
     "slots": { "query": null, "category": null, "productId": <id resolved from "iPhone 15 Plus">, "productIds": null, "sortBy": null, "order": null }
   }
 ]
-## Example 3 - Compare products
+## Example 3 - List Products
+User: List products in descending order by title
+Thought: The user is asking to List products. He is not specifying for specific products. He wants to list all products.
+intents: [
+  {
+    "type": "browse_products",
+    "node": "searchExplorer",
+    "confidence": <your confidence>
+    "slots": { "query": null, "category": null, "productId": null, "productIds": null, "sortBy": "title", "order": "desc" }
+  }
+]
+
+## Example 4 - Compare products
 Compare product A and product B for me, which one is better?
 Thought: The user is asking to compare two specific products already discussed. Resolve the product names from the conversation history to their IDs.
 intents: [

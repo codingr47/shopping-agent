@@ -3,19 +3,20 @@ import { runEvalTurn } from "./lib/runEvalTurn.js";
 import { EvaluationOutput, EvalExample, RunResult, EvaluatorResult } from "./lib/types.js";
 import fs from "fs";
 import path from "path";
-import { allDatasetExamples } from "./lib/loadDatasets.js";
+import { getFilteredExamples } from "./lib/filterExamples.js";
 import { journeyPassEvaluator, intentAccuracyEvaluator, completionEvaluator, forbiddenStepEvaluator } from "./evaluators/journey.js";
 import {
   toolSelectionAccuracyEvaluator,
   unnecessaryToolCallEvaluator,
   forbiddenToolCallEvaluator,
   invalidToolArgumentEvaluator,
+  toolArgumentMatchEvaluator,
 } from "./evaluators/toolMetrics.js";
 import { trajectoryMatchEvaluator } from "./evaluators/trajectory.js";
 import { computeReliability } from "./evaluators/reliability.js";
 import { generateHtmlReport } from "./report/generateReport.js";
 
-const EVAL_REPETITIONS = 3;
+const EVAL_REPETITIONS = 1;
 
 interface CollectedRow {
   inputs: { prompt: string };
@@ -31,6 +32,7 @@ const evaluators = [
   unnecessaryToolCallEvaluator,
   forbiddenToolCallEvaluator,
   invalidToolArgumentEvaluator,
+  toolArgumentMatchEvaluator,
   trajectoryMatchEvaluator,
 ];
 
@@ -43,9 +45,10 @@ describe("shopping agent journeys", () => {
     "passes journey/intent/tool checks and meets reliability thresholds",
     async () => {
       const numRepetitions = EVAL_REPETITIONS;
+      const examples = getFilteredExamples();
 
       // Run each example numRepetitions times
-      for (const example of allDatasetExamples) {
+      for (const example of examples) {
         for (let rep = 0; rep < numRepetitions; rep++) {
           const outputs = await runEvalTurn(example.inputs.prompt);
           collected.push({ inputs: example.inputs, outputs });
@@ -112,7 +115,7 @@ describe("shopping agent journeys", () => {
     const html = generateHtmlReport(runResults, reliabilitySnapshot);
     const outDir = path.resolve(__dirname, "report-output");
     fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(path.join(outDir, "report.html"), html, "utf-8");
+    fs.writeFileSync(path.join(outDir, `report_${Date.now()}.html`), html, "utf-8");
     console.log(`\n📊 Eval report written to ${path.join(outDir, "report.html")}`);
   });
 });

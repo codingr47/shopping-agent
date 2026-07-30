@@ -7,6 +7,7 @@ import {
   getProductsByCategoryInput,
 } from "@shopping-agent/shared";
 import { EvaluationOutput, EvalExample } from "../lib/types.js";
+import { deepEqual } from "../lib/deepEqual.js";
 
 const toolSchemas: Record<string, z.ZodTypeAny> = {
   search_products: searchProductsInput,
@@ -123,6 +124,42 @@ export const invalidToolArgumentEvaluator = {
       key: "invalid_tool_argument_rate",
       score: 1 - rate,
       comment: issues.length > 0 ? issues.slice(0, 3).join(" | ") : "All arguments valid",
+    };
+  },
+};
+
+export const toolArgumentMatchEvaluator = {
+  key: "tool_argument_match",
+  scorer: ({
+    outputs,
+    referenceOutputs,
+  }: {
+    outputs: EvaluationOutput;
+    referenceOutputs: EvalExample["referenceOutputs"];
+  }) => {
+    const expectedToolArgs = referenceOutputs.expectedToolArgs || [];
+    if (expectedToolArgs.length === 0) {
+      return { key: "tool_argument_match", score: 1, comment: "No expected tool arguments to check" };
+    }
+
+    const failures: string[] = [];
+    for (const expected of expectedToolArgs) {
+      const candidates = outputs.toolCalls.filter(tc => tc.name === expected.tool);
+      const matched = candidates.some(tc => deepEqual(expected.args, tc.args));
+      if (!matched) {
+        failures.push(
+          candidates.length === 0
+            ? `${expected.tool} was never called`
+            : `${expected.tool} called but args didn't match ${JSON.stringify(expected.args)} (got ${candidates.map(c => JSON.stringify(c.args)).join(" | ")})`,
+        );
+      }
+    }
+
+    const score = (expectedToolArgs.length - failures.length) / expectedToolArgs.length;
+    return {
+      key: "tool_argument_match",
+      score,
+      comment: failures.length > 0 ? failures.join(" | ") : "All expected tool arguments matched",
     };
   },
 };

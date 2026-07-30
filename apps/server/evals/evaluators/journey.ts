@@ -1,14 +1,5 @@
 import { EvaluationOutput, EvalExample } from "../lib/types.js";
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b) return false;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((item, i) => deepEqual(item, b[i]));
-  }
-  return false;
-}
+import { deepEqual } from "../lib/deepEqual.js";
 
 export const journeyPassEvaluator = {
   key: "journey_pass",
